@@ -117,7 +117,7 @@ export async function signInGoogleDrive(): Promise<void> {
           "Login do Google não concluído. Verifique bloqueio de pop-ups."
         )
       );
-    }, 15000);
+    }, 30000);
 
     tokenClient!.callback = (resp: any) => {
       clearTimeout(timeout);
