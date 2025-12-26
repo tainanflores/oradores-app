@@ -142,9 +142,15 @@ function AgendaPage() {
   const handleDiaClick = (data: Date) => {
     const chave = data.toISOString().split("T")[0];
     const discurso = discursos.find((d) => d.data === chave);
+    const ocupadoPorEspecial = isDiaOcupadoPorDataEspecial(data);
+
+    // Não permitir agendamento se já houver discurso ou estiver ocupado por data especial
+    if (discurso || ocupadoPorEspecial) {
+      return;
+    }
 
     setDataSelecionada(data);
-    setDiscursoSelecionado(discurso || null);
+    setDiscursoSelecionado(null);
     setModalOpen(true);
   };
 
@@ -164,7 +170,41 @@ function AgendaPage() {
     setTemas(temasData);
   }, []);
 
-  // Função para verificar se um final de semana de reunião (sábado ou domingo) deve ser ocupado por data especial
+  // Função para verificar se um dia deve estar ocupado por data especial
+  const isDiaOcupadoPorDataEspecial = (dia: Date): boolean => {
+    if (!configuracao) return false;
+
+    // Para cada data especial (exceto celebração e discurso especial)
+    for (const dataEspecial of datasEspeciais) {
+      if (
+        dataEspecial.tipo === "celebracao" ||
+        dataEspecial.tipo === "discurso_especial"
+      ) {
+        continue; // Essas ocupam apenas o dia específico
+      }
+
+      // Verificar se a data especial está na mesma semana que o dia atual
+      const inicioSemana = startOfWeek(dia, { weekStartsOn: 1 }); // Segunda-feira
+      const fimSemana = endOfWeek(dia, { weekStartsOn: 1 }); // Domingo
+
+      if (
+        isWithinInterval(dataEspecial.data, {
+          start: inicioSemana,
+          end: fimSemana,
+        })
+      ) {
+        // Se estiver na mesma semana, verificar se o dia atual é o dia da reunião
+        const diaSemanaAtual = dia.getDay(); // 0 = domingo, 1 = segunda, etc.
+        const diaReuniaoNumero = getDiaSemanaNumero(configuracao.diaReuniao);
+
+        if (diaSemanaAtual === diaReuniaoNumero) {
+          return true; // Este dia da reunião está ocupado pela data especial
+        }
+      }
+    }
+
+    return false;
+  };
 
   // Função para verificar se uma data está na semana atual (segunda a domingo)
   const isDataNaSemanaAtual = (data: Date): boolean => {
@@ -327,6 +367,10 @@ function AgendaPage() {
                         (de) => de.data === chave
                       );
 
+                      // Verificar se o dia está ocupado por data especial da semana
+                      const ocupadoPorEspecial =
+                        isDiaOcupadoPorDataEspecial(dia);
+
                       // Se houver data especial, renderizar com destaque especial
                       if (dataEspecial) {
                         let oradorEspecial = null;
@@ -429,12 +473,18 @@ function AgendaPage() {
                       return (
                         <div
                           key={dia.toISOString()}
-                          onClick={() => !isPast && handleDiaClick(dia)}
+                          onClick={() =>
+                            !isPast &&
+                            !ocupadoPorEspecial &&
+                            handleDiaClick(dia)
+                          }
                           className={`p-2 rounded text-sm transition-colors ${
                             discurso
                               ? isCurrentWeek && !isPast
                                 ? "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"
                                 : "bg-orange-100 text-orange-800 hover:bg-orange-200 cursor-pointer"
+                              : ocupadoPorEspecial
+                              ? "bg-red-100 text-red-800 cursor-not-allowed"
                               : isPast
                               ? "bg-gray-100 text-gray-400 cursor-not-allowed"
                               : "bg-blue-50 text-blue-800 hover:bg-blue-100 cursor-pointer"
@@ -456,6 +506,39 @@ function AgendaPage() {
                                 </span>
                                 <span className="text-xs flex items-center justify-center">
                                   <Edit size={12} />
+                                </span>
+                              </>
+                            ) : ocupadoPorEspecial ? (
+                              <>
+                                <span className="font-medium text-sm truncate flex-1 text-center text-red-700">
+                                  {(() => {
+                                    // Encontrar qual data especial está ocupando este dia
+                                    for (const de of datasEspeciais) {
+                                      if (
+                                        de.tipo === "celebracao" ||
+                                        de.tipo === "discurso_especial"
+                                      )
+                                        continue;
+                                      const inicioSemana = startOfWeek(dia, {
+                                        weekStartsOn: 1,
+                                      });
+                                      const fimSemana = endOfWeek(dia, {
+                                        weekStartsOn: 1,
+                                      });
+                                      if (
+                                        isWithinInterval(de.data, {
+                                          start: inicioSemana,
+                                          end: fimSemana,
+                                        })
+                                      ) {
+                                        return de.tipo.replace("_", " ");
+                                      }
+                                    }
+                                    return "Ocupado";
+                                  })()}
+                                </span>
+                                <span className="text-xs flex items-center justify-center text-red-600">
+                                  <Target size={12} />
                                 </span>
                               </>
                             ) : (
