@@ -1,12 +1,23 @@
 import { useState, useEffect } from "react";
-import { db, type DataEspecial, type Orador, type Tema } from "../database";
+import { db, type DataEspecial, type Orador } from "../database";
 
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
-import { dbSaveWithBackup } from "../utils/dbWithBackup";
+import { dbSaveWithBackup, dbDeleteWithBackup } from "../utils/dbWithBackup";
 import { useConfig } from "../contexts/ConfigContext";
 import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
+import { formatDateBR } from "../utils/dateUtils";
+import {
+  Calendar,
+  Building,
+  Globe,
+  Monitor,
+  Trash2,
+  Plus,
+  Check,
+  Heart,
+  Mic,
+  Plane,
+} from "lucide-react";
 
 interface ModalDatasEspeciaisProps {
   isOpen: boolean;
@@ -32,10 +43,13 @@ function ModalDatasEspeciais({
     null
   );
   const [showOradorDropdown, setShowOradorDropdown] = useState(false);
-  const [temaSelecionado, setTemaSelecionado] = useState<Tema | null>(null);
   // Carregar oradores ativos e temas ativos ao abrir modal
   useEffect(() => {
-    if (isOpen && tipoSelecionado === "celebracao") {
+    if (
+      isOpen &&
+      (tipoSelecionado === "celebracao" ||
+        tipoSelecionado === "discurso_especial")
+    ) {
       db.oradores
         .filter((orador) => orador.ativo)
         .toArray()
@@ -45,7 +59,6 @@ function ModalDatasEspeciais({
       setBuscaOrador("");
       setOradorSelecionado(null);
       setShowOradorDropdown(false);
-      setTemaSelecionado(null);
     }
   }, [isOpen, tipoSelecionado]);
   useEffect(() => {
@@ -72,28 +85,22 @@ function ModalDatasEspeciais({
     }
   };
 
-  const getEmojiTipo = (tipo: string) => {
+  const getIconTipo = (tipo: string) => {
     switch (tipo) {
       case "assembleia":
-        return "🏛️";
+        return <Building className="w-5 h-5 text-blue-600" />;
       case "congresso":
-        return "🌍";
+        return <Globe className="w-5 h-5 text-green-600" />;
       case "celebracao":
-        return "🎉";
+        return <Heart className="w-5 h-5 text-purple-600" />;
+      case "discurso_especial":
+        return <Mic className="w-5 h-5 text-indigo-600" />;
       case "evento_transmitido":
-        return "📺";
+        return <Monitor className="w-5 h-5 text-orange-600" />;
+      case "visita_viajante":
+        return <Plane className="w-5 h-5 text-teal-600" />;
       default:
-        return "📅";
-    }
-  };
-
-  const formatarData = (dataString: string) => {
-    try {
-      const data = parseISO(dataString);
-      return format(data, "dd/MM/yyyy", { locale: ptBR });
-    } catch (error) {
-      console.error("Erro ao formatar data:", error);
-      return dataString; // Fallback
+        return <Calendar className="w-5 h-5 text-gray-600" />;
     }
   };
 
@@ -105,25 +112,30 @@ function ModalDatasEspeciais({
       try {
         // Buscar a data especial antes de remover
         const dataEspecial = await db.datasEspeciais.get(id);
-        await db.datasEspeciais.delete(id);
+        await dbDeleteWithBackup(
+          "datasEspeciais",
+          id,
+          congregacao!.autoBackup,
+          isSignedIn,
+          uploadBackup
+        );
 
-        // Se for celebração, remover discurso correspondente
-        if (dataEspecial?.tipo === "celebracao") {
+        // Se for celebração ou discurso especial, remover discurso correspondente
+        if (
+          dataEspecial?.tipo === "celebracao" ||
+          dataEspecial?.tipo === "discurso_especial"
+        ) {
           // Discurso tem data igual e temaId 1
           const discurso = await db.discursos
             .where({ data: dataEspecial.data, temaId: 1 })
             .first();
           if (discurso) {
-            await db.discursos.delete(discurso.id!);
-            // Backup dos discursos após remoção
-            const discursosRestantes = await db.discursos.toArray();
-            await dbSaveWithBackup(
+            await dbDeleteWithBackup(
               "discursos",
-              discursosRestantes,
+              discurso.id!,
               congregacao!.autoBackup,
               isSignedIn,
-              uploadBackup,
-              false
+              uploadBackup
             );
           }
         }
@@ -157,8 +169,18 @@ function ModalDatasEspeciais({
       toast.error("Selecione o tipo e a data!");
       return;
     }
-    if (tipoSelecionado === "celebracao" && !oradorSelecionado) {
-      toast.error("Selecione o orador para a celebração!");
+    if (
+      (tipoSelecionado === "celebracao" ||
+        tipoSelecionado === "discurso_especial") &&
+      !oradorSelecionado
+    ) {
+      toast.error(
+        `Selecione o orador para ${
+          tipoSelecionado === "celebracao"
+            ? "a celebração"
+            : "o discurso especial"
+        }!`
+      );
       return;
     }
     setLoading(true);
@@ -168,7 +190,9 @@ function ModalDatasEspeciais({
           | "assembleia"
           | "congresso"
           | "celebracao"
-          | "evento_transmitido",
+          | "discurso_especial"
+          | "evento_transmitido"
+          | "visita_viajante",
         data: dataSelecionada,
       };
       await dbSaveWithBackup(
@@ -179,8 +203,12 @@ function ModalDatasEspeciais({
         uploadBackup,
         false
       );
-      // Se for celebração, salva também na agenda (discursos) com temaId 1
-      if (tipoSelecionado === "celebracao" && oradorSelecionado) {
+      // Se for celebração ou discurso especial, salva também na agenda (discursos) com temaId 1
+      if (
+        (tipoSelecionado === "celebracao" ||
+          tipoSelecionado === "discurso_especial") &&
+        oradorSelecionado
+      ) {
         await dbSaveWithBackup(
           "discursos",
           {
@@ -194,12 +222,15 @@ function ModalDatasEspeciais({
           uploadBackup
         );
       }
-      onClose();
+      // Modal permanece aberto após adicionar
       setTipoSelecionado("");
       setDataSelecionada("");
+      setOradorSelecionado(null);
+      setBuscaOrador("");
       // Recarregar as datas especiais após adicionar
       await carregarDatasEspeciais();
       onSave?.();
+      toast.success("Data especial adicionada com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar data especial:", error);
       toast.error("Erro ao salvar data especial. Tente novamente.");
@@ -209,59 +240,85 @@ function ModalDatasEspeciais({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md mx-4">
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-800">
-              🎯 Adicionar Data Especial
-            </h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors text-xl font-bold"
-            >
-              ✕
-            </button>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm max-h-[95vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="p-1.5 bg-purple-100 rounded-lg flex-shrink-0">
+              <Calendar className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-gray-900 truncate">
+                Adicionar Data Especial
+              </h2>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
+            aria-label="Fechar modal"
+          >
+            ✕
+          </button>
         </div>
 
+        {/* Content */}
         <div className="p-4 space-y-4">
           {/* Tipo de data especial */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
               Tipo de Data Especial
             </label>
-            <select
-              value={tipoSelecionado}
-              onChange={(e) => setTipoSelecionado(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              <option value="">Selecione o tipo</option>
-              <option value="assembleia">🏛️ Assembleia</option>
-              <option value="congresso">🌍 Congresso</option>
-              <option value="celebracao">🎉 Celebração</option>
-              <option value="evento_transmitido">📺 Evento Transmitido</option>
-            </select>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { value: "assembleia", label: "Assembleia" },
+                { value: "congresso", label: "Congresso" },
+                { value: "celebracao", label: "Celebração" },
+                { value: "discurso_especial", label: "Discurso Especial" },
+                { value: "evento_transmitido", label: "Evento Transmitido" },
+                { value: "visita_viajante", label: "Visita Viajante" },
+              ].map((tipo) => (
+                <button
+                  key={tipo.value}
+                  type="button"
+                  onClick={() => setTipoSelecionado(tipo.value)}
+                  className={`flex items-center justify-center gap-2 p-2 rounded-lg border-2 transition-all w-full ${
+                    tipoSelecionado === tipo.value
+                      ? "border-purple-500 bg-purple-50 text-purple-700"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {getIconTipo(tipo.value)}
+                  <span className="text-sm font-medium">{tipo.label}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Seleção de data */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
               Data
             </label>
             <input
               type="date"
               value={dataSelecionada}
               onChange={(e) => setDataSelecionada(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+              required
             />
           </div>
 
-          {/* Se for celebração, campo de busca de orador e seleção de tema */}
-          {tipoSelecionado === "celebracao" && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Orador da Celebração
+          {/* Se for celebração ou discurso especial, campo de busca de orador e seleção de tema */}
+          {(tipoSelecionado === "celebracao" ||
+            tipoSelecionado === "discurso_especial") && (
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Orador{" "}
+                {tipoSelecionado === "celebracao"
+                  ? "da Celebração"
+                  : "do Discurso Especial"}
               </label>
               <div className="relative">
                 <input
@@ -273,10 +330,10 @@ function ModalDatasEspeciais({
                   }}
                   onFocus={() => setShowOradorDropdown(true)}
                   placeholder="Digite o nome do orador..."
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
                 />
                 {showOradorDropdown && buscaOrador && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                     {oradores.filter(
                       (o) =>
                         o.ativo &&
@@ -298,7 +355,7 @@ function ModalDatasEspeciais({
                               setBuscaOrador(orador.nome);
                               setShowOradorDropdown(false);
                             }}
-                            className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                            className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
                           >
                             <div className="font-medium">{orador.nome}</div>
                             <div className="text-sm text-gray-500">
@@ -307,7 +364,7 @@ function ModalDatasEspeciais({
                           </div>
                         ))
                     ) : (
-                      <div className="p-2 text-gray-500 text-sm">
+                      <div className="p-3 text-gray-500 text-sm">
                         Nenhum orador encontrado
                       </div>
                     )}
@@ -315,7 +372,8 @@ function ModalDatasEspeciais({
                 )}
               </div>
               {oradorSelecionado && (
-                <div className="mt-2 text-sm text-green-700">
+                <div className="mt-2 text-sm text-green-700 flex items-center gap-1">
+                  <Check className="w-4 h-4" />
                   Selecionado: {oradorSelecionado.nome}
                 </div>
               )}
@@ -323,8 +381,8 @@ function ModalDatasEspeciais({
           )}
           {/* Datas especiais existentes */}
           {datasEspeciais.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="space-y-2 overflow-y-auto max-h-60">
+              <label className="block text-sm font-medium text-gray-700">
                 Datas Especiais Definidas
               </label>
               <div className="max-h-40 overflow-y-auto space-y-2">
@@ -336,35 +394,36 @@ function ModalDatasEspeciais({
                   .map((dataEspecial) => (
                     <div
                       key={dataEspecial.id}
-                      className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {getEmojiTipo(dataEspecial.tipo)}
-                        </span>
-                        <div>
-                          <div className="font-medium capitalize">
-                            {dataEspecial.tipo}
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <div className="flex-shrink-0">
+                          {getIconTipo(dataEspecial.tipo)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium capitalize text-gray-900">
+                            {dataEspecial.tipo.replace("_", " ")}
                           </div>
                           <div className="text-sm text-gray-600">
-                            {formatarData(dataEspecial.data)}
+                            {formatDateBR(dataEspecial.data)}
                           </div>
                         </div>
                       </div>
                       <button
                         onClick={() => handleRemoverData(dataEspecial.id!)}
-                        className={`text-red-500 hover:text-red-700 transition-colors flex items-center gap-1 ${
+                        className={`p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0 ${
                           removendoId === dataEspecial.id
                             ? "opacity-60 cursor-not-allowed"
                             : ""
                         }`}
                         title="Remover data especial"
                         disabled={removendoId === dataEspecial.id || loading}
+                        aria-label="Remover data especial"
                       >
                         {removendoId === dataEspecial.id ? (
-                          <span className="animate-spin inline-block w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full"></span>
+                          <div className="animate-spin inline-block w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full"></div>
                         ) : (
-                          "🗑️"
+                          <Trash2 className="w-4 h-4" />
                         )}
                       </button>
                     </div>
@@ -374,14 +433,25 @@ function ModalDatasEspeciais({
           )}
         </div>
 
-        <div className="p-4 border-t border-gray-200 flex gap-3">
+        {/* Footer */}
+        <div className="p-1 border-t border-gray-200 flex gap-3">
           {dataSelecionada && tipoSelecionado && (
             <button
               onClick={handleSalvar}
-              className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
+              className="flex-1 bg-purple-600 text-white py-2.5 px-4 rounded-lg hover:bg-purple-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               disabled={loading}
             >
-              {loading ? "Salvando..." : "Adicionar"}
+              {loading ? (
+                <>
+                  <div className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Plus className="w-4 h-4" />
+                  Adicionar
+                </>
+              )}
             </button>
           )}
         </div>

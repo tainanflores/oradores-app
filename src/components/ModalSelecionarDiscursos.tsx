@@ -1,5 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { db, type Tema } from "../database";
+import { dbSaveWithBackup } from "../utils/dbWithBackup";
+import { useConfig } from "../contexts/ConfigContext";
+import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
 
 interface ModalSelecionarDiscursosProps {
   isOpen: boolean;
@@ -23,18 +26,10 @@ function ModalSelecionarDiscursos({
     Set<number>
   >(new Set());
   const [busca, setBusca] = useState("");
+  const { congregacao } = useConfig();
+  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
 
-  useEffect(() => {
-    if (isOpen) {
-      carregarDiscursosDisponiveis();
-      // Inicializar com discursos já vinculados selecionados
-      const idsJaVinculados = new Set(discursosJaVinculados.map((d) => d.id!));
-      setDiscursosSelecionados(idsJaVinculados);
-      setBusca("");
-    }
-  }, [isOpen, discursosJaVinculados]);
-
-  const carregarDiscursosDisponiveis = async () => {
+  const carregarDiscursosDisponiveis = useCallback(async () => {
     try {
       const todosDiscursos = await db.temas.toArray();
       const discursosAtivos = todosDiscursos.filter((d) => d.ativo);
@@ -58,7 +53,24 @@ function ModalSelecionarDiscursos({
     } catch (error) {
       console.error("Erro ao carregar discursos disponíveis:", error);
     }
-  };
+  }, [discursosJaVinculados]);
+
+  useEffect(() => {
+    if (isOpen) {
+      carregarDiscursosDisponiveis();
+      setBusca("");
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [isOpen, carregarDiscursosDisponiveis]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Inicializar com discursos já vinculados selecionados
+      const idsJaVinculados = new Set(discursosJaVinculados.map((d) => d.id!));
+      setDiscursosSelecionados(idsJaVinculados);
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [isOpen, discursosJaVinculados]);
 
   const idsJaVinculados = new Set(discursosJaVinculados.map((d) => d.id));
 
@@ -94,17 +106,33 @@ function ModalSelecionarDiscursos({
       discursosSelecionados.has(d.id!)
     );
     if (persistOnConfirm && oradorId) {
-      // Persistir vínculos imediatamente
-      const vinculosParaAdicionar = discursosSelecionadosList
-        .filter((tema) => tema.id)
-        .map((tema) => ({
-          oradorId,
-          temaId: tema.id!,
-        }));
-      // Remover vínculos antigos e adicionar novos
-      await db.oradorTemas.where("oradorId").equals(oradorId).delete();
-      if (vinculosParaAdicionar.length > 0) {
-        await db.oradorTemas.bulkAdd(vinculosParaAdicionar);
+      // Persistir vínculos de forma otimizada
+      try {
+        console.log("Persistindo vínculos de temas para oradorId:", oradorId);
+
+        // Deletar todos os vínculos existentes SEM backup (operação intermediária)
+        await db.oradorTemas.where("oradorId").equals(oradorId).delete();
+
+        // Adicionar novos vínculos usando dbSaveWithBackup (apenas esta operação faz backup)
+        const vinculosParaAdicionar = discursosSelecionadosList
+          .filter((tema) => tema.id)
+          .map((tema) => ({
+            oradorId,
+            temaId: tema.id!,
+          }));
+
+        if (vinculosParaAdicionar.length > 0) {
+          await dbSaveWithBackup(
+            "oradorTemas",
+            vinculosParaAdicionar,
+            Boolean(congregacao?.autoBackup),
+            isSignedIn,
+            uploadBackup
+          );
+        }
+      } catch (error) {
+        console.error("Erro ao persistir vínculos de temas:", error);
+        throw error; // Re-throw para que o erro seja tratado pelo componente pai
       }
     }
     onConfirm(discursosSelecionadosList);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { Ban, Search, X, Save, Loader2 } from "lucide-react";
 import { db, type Tema, type TemaBloqueado } from "../database";
 import { dbSaveWithBackup } from "../utils/dbWithBackup";
 import { useConfig } from "../contexts/ConfigContext";
@@ -85,10 +86,10 @@ function ModalBloquearTemas({
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Remover bloqueios existentes para este ano
+      // Remover bloqueios existentes para este ano (sem backup - operação intermediária)
       await db.temasBloqueados.where("ano").equals(anoServico).delete();
 
-      // Adicionar novos bloqueios
+      // Adicionar novos bloqueios com backup
       const bloqueiosParaAdicionar = Array.from(selecionados).map((temaId) => ({
         temaId,
         ano: anoServico,
@@ -116,27 +117,40 @@ function ModalBloquearTemas({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg w-full h-full max-w-none max-h-none overflow-hidden flex flex-col">
-        <div className="p-3 border-b border-gray-200">
-          <h2 className="text-xl font-bold text-gray-800">
-            🚫 Bloquear Esboços - Ano {anoServico}
-          </h2>
-
-          <p className="text-gray-600 mt-1">
-            <small>
-              Período: Setembro {anoServico} - Agosto {anoServico + 1}
-            </small>
-          </p>
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-4 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Ban className="w-6 h-6" />
+              <div>
+                <h2 className="text-xl font-bold">
+                  Bloquear Esboços - Ano {anoServico}
+                </h2>
+                <p className="text-red-100 text-sm">
+                  Setembro {anoServico} - Agosto {anoServico + 1}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Campo de busca */}
-        <div className="p-3 border-b border-gray-200">
-          <input
-            type="text"
-            value={buscaTema}
-            onChange={(e) => setBuscaTema(e.target.value)}
-            placeholder="Buscar por número ou título do esboço..."
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-          />
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              value={buscaTema}
+              onChange={(e) => setBuscaTema(e.target.value)}
+              placeholder="Buscar por número ou título do esboço..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
         </div>
 
         {/* Lista de temas */}
@@ -148,19 +162,34 @@ function ModalBloquearTemas({
               <div
                 key={tema.id}
                 onClick={() => toggleSelecao(tema.id!)}
-                className={`p-3 rounded-md cursor-pointer transition-colors mb-2 ${
+                className={`p-4 rounded-lg cursor-pointer transition-all duration-200 mb-3 border-2 ${
                   isSelecionado
-                    ? "bg-red-100 border border-red-300"
-                    : "bg-gray-50 hover:bg-gray-100 border border-gray-200"
+                    ? "bg-gradient-to-r from-red-50 to-red-100 border-red-300 shadow-md"
+                    : "bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300 hover:shadow-sm"
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    checked={isSelecionado}
-                    onChange={() => {}} // Controlado pelo onClick do div
-                    className="w-4 h-4 text-red-600"
-                  />
+                  <div
+                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      isSelecionado
+                        ? "bg-red-500 border-red-500"
+                        : "border-gray-300 hover:border-red-400"
+                    }`}
+                  >
+                    {isSelecionado && (
+                      <svg
+                        className="w-3 h-3 text-white"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                    )}
+                  </div>
                   <div className="flex-1">
                     <div
                       className={`font-medium text-left ${
@@ -170,7 +199,7 @@ function ModalBloquearTemas({
                       {tema.numero}. {tema.titulo}
                     </div>
                   </div>
-                  {isSelecionado && <span className="text-red-500">🚫</span>}
+                  {isSelecionado && <Ban className="w-5 h-5 text-red-500" />}
                 </div>
               </div>
             );
@@ -178,24 +207,42 @@ function ModalBloquearTemas({
         </div>
 
         <div className="p-6 border-t border-gray-200 bg-gray-50">
-          <div className="text-sm text-gray-600 mb-4">
-            {selecionados.size} esboço(s) selecionado(s) para bloqueio
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-gray-600">
+              {selecionados.size} esboço(s) selecionado(s) para bloqueio
+            </div>
+            {selecionados.size > 0 && <Ban className="w-4 h-4 text-red-500" />}
           </div>
 
           <div className="flex gap-3">
             <button
               onClick={onClose}
-              className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
+              className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors font-medium flex items-center justify-center gap-2"
               disabled={loading}
             >
+              <X className="w-4 h-4" />
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 bg-orange-600 text-white py-2 px-4 rounded-md hover:bg-orange-700 transition-colors disabled:opacity-50"
+              className={`flex-1 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
+                houveAlteracao
+                  ? "bg-red-600 text-white hover:bg-red-700"
+                  : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
               disabled={loading || !houveAlteracao}
             >
-              {loading ? "Salvando..." : "Salvar Bloqueios"}
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Salvar Bloqueios
+                </>
+              )}
             </button>
           </div>
         </div>

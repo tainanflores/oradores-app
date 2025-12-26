@@ -3,6 +3,8 @@ import { db, type Tema, type TemaBloqueado } from "../database";
 import ModalBloquearTemas from "../components/ModalBloquearTemas";
 import ModalEditarTema from "../components/ModalEditarTema";
 import ModalHistoricoTema from "../components/ModalHistoricoTema";
+import { formatDateBR } from "../utils/dateUtils";
+import { BookOpen, Search, Ban, Plus, Loader2, FileText } from "lucide-react";
 
 function TemasPage() {
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -53,9 +55,7 @@ function TemasPage() {
 
           if (discursosTema.length > 0) {
             const ultimaData = discursosTema[0].data;
-            const dataFormatada = new Date(ultimaData).toLocaleDateString(
-              "pt-BR"
-            );
+            const dataFormatada = formatDateBR(ultimaData);
             ultimasDatasMap.set(tema.id!, dataFormatada);
           }
         });
@@ -108,7 +108,7 @@ function TemasPage() {
 
       if (discursosTema.length > 0) {
         const ultimaData = discursosTema[0].data;
-        const dataFormatada = new Date(ultimaData).toLocaleDateString("pt-BR");
+        const dataFormatada = formatDateBR(ultimaData);
         ultimasDatasMap.set(tema.id!, dataFormatada);
       }
     });
@@ -129,34 +129,51 @@ function TemasPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col">
       {/* Cabeçalho fixo */}
-      <div className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200 p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800">📚 Esboços</h1>
+      <div className="sticky top-0 left-0 right-0 w-full bg-gradient-to-r from-purple-50 to-blue-50 shadow-md z-20">
+        <div className="max-w-7xl mx-auto p-4 flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <BookOpen className="w-6 h-6 text-purple-600" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-800">Esboços</h1>
+          </div>
+        </div>
+      </div>
 
+      {/* Controles */}
+      <div className="sticky top-[64px] bg-white from-purple-50 to-blue-50 z-10 pb-4 border-b border-purple-200 p-4 shadow-sm">
         {/* Campo de busca */}
         <div className="mb-4">
-          <input
-            type="text"
-            value={buscaTema}
-            onChange={(e) => setBuscaTema(e.target.value)}
-            placeholder="Buscar por número ou título do esboço..."
-            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={buscaTema}
+              onChange={(e) => setBuscaTema(e.target.value)}
+              placeholder="Buscar por número ou título do esboço..."
+              className="w-full pl-10 pr-4 py-3 border border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 bg-white shadow-sm"
+            />
+          </div>
         </div>
 
-        <div className="flex gap-2 justify-around md:justify-start">
+        <div className="flex gap-3 justify-around md:justify-start">
           <button
             onClick={handleBloquearTemas}
-            className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+            className="flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-lg hover:from-orange-600 hover:to-red-600 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:scale-105"
           >
-            🚫 Bloquear
+            <Ban className="w-4 h-4" />
+            Bloquear
           </button>
           <button
             onClick={handleAdicionarTema}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex items-center gap-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-4 py-2 rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all duration-200 font-medium shadow-md hover:shadow-lg transform hover:scale-105"
           >
-            ➕ Adicionar
+            <Plus className="w-4 h-4" />
+            Adicionar
           </button>
         </div>
       </div>
@@ -164,53 +181,95 @@ function TemasPage() {
       {/* Lista scrollável */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Carregando esboços...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="relative">
+              <Loader2 className="w-12 h-12 text-purple-600 animate-spin" />
+            </div>
+            <p className="mt-4 text-gray-600 font-medium">
+              Carregando esboços...
+            </p>
           </div>
         ) : temasFiltrados.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-gray-600">
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <div className="p-4 bg-gray-100 rounded-full mb-4">
+              <FileText className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-700 mb-2">
               {buscaTema
-                ? `Nenhum esboço encontrado para "${buscaTema}"`
+                ? "Nenhum resultado encontrado"
                 : "Nenhum esboço cadastrado"}
+            </h3>
+            <p className="text-gray-500 text-center max-w-sm">
+              {buscaTema
+                ? `Não encontramos esboços que correspondam à sua busca por "${buscaTema}"`
+                : "Comece adicionando seu primeiro esboço para organizar as apresentações da congregação"}
             </p>
           </div>
         ) : (
-          <div className="p-4 space-y-2">
+          <div className="p-4 space-y-3">
             {temasFiltrados.map((tema) => {
               const bloqueado = isTemaBloqueado(tema.id!);
 
               return (
                 <div
                   key={tema.id}
-                  className={`p-2 rounded-lg shadow cursor-pointer hover:shadow-md transition-shadow ${
+                  className={`group relative overflow-hidden rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer transform hover:scale-[1.02] ${
                     bloqueado
-                      ? "bg-gray-100 border-l-4 border-red-400"
-                      : "bg-white border-l-4 border-green-400"
+                      ? "bg-gradient-to-r from-red-50 to-orange-50 border border-red-200"
+                      : "bg-gradient-to-r from-white to-purple-50 border border-purple-200 hover:border-purple-300"
                   }`}
                   onClick={() => handleVerHistorico(tema)}
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <h3
-                        className={`font-semibold text-left ${
-                          bloqueado
-                            ? "text-gray-500 line-through"
-                            : "text-gray-800"
-                        }`}
-                      >
-                        {tema.numero}. {tema.titulo}
-                        {ultimasDatas.has(tema.id!) && (
-                          <span className="text-gray-500 text-sm ml-2">
-                            ({ultimasDatas.get(tema.id!)})
-                          </span>
-                        )}
-                      </h3>
+                  {/* Efeito de brilho no hover */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform -skew-x-12 translate-x-[-100%] group-hover:translate-x-[200%]"></div>
+
+                  <div className="relative p-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {/* Ícone do tema */}
+                        <div
+                          className={`p-2 rounded-lg ${
+                            bloqueado
+                              ? "bg-red-100 text-red-600"
+                              : "bg-purple-100 text-purple-600"
+                          }`}
+                        >
+                          <BookOpen className="w-4 h-4" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3
+                              className={`font-semibold text-base leading-tight truncate ${
+                                bloqueado
+                                  ? "text-red-700"
+                                  : "text-gray-800 group-hover:text-purple-800"
+                              } transition-colors duration-200`}
+                            >
+                              {tema.numero}. {tema.titulo}
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            {ultimasDatas.has(tema.id!) && (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>
+                                  Última apresentação:{" "}
+                                  {ultimasDatas.get(tema.id!)}
+                                </span>
+                              </div>
+                            )}
+
+                            {bloqueado && (
+                              <div className="flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full ml-3">
+                                <Ban className="w-3 h-3" />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    {bloqueado && (
-                      <span className="text-red-500 text-lg">🚫</span>
-                    )}
                   </div>
                 </div>
               );

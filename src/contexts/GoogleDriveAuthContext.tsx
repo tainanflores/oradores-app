@@ -95,7 +95,8 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err) {
       toast.error(
-        "Falha ao conectar com o Google Drive. Permita pop-ups no navegador e tente novamente."
+        "Falha ao conectar com o Google Drive. Permita pop-ups no navegador e tente novamente." +
+          err
       );
     } finally {
       setLoading(false);

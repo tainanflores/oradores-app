@@ -12,6 +12,20 @@ import {
   downloadBackupFromDrive,
 } from "../utils/googleDrive";
 import { dbSaveWithBackup } from "../utils/dbWithBackup";
+import {
+  Settings,
+  Building,
+  HardDrive,
+  Cloud,
+  Save,
+  X,
+  Upload,
+  Download,
+  LogOut,
+  Link,
+  CheckCircle,
+  XCircle,
+} from "lucide-react";
 
 function ConfigPage() {
   const [showCongregacaoModal, setShowCongregacaoModal] = useState(false);
@@ -143,10 +157,6 @@ function ConfigPage() {
     }
   };
 
-  const handleSync = () => {
-    toast("Funcionalidade de sincronização será implementada em breve");
-  };
-
   // Backup manual no Drive
   const handleBackupToDrive = async () => {
     try {
@@ -187,26 +197,15 @@ function ConfigPage() {
         ...congregacao,
         autoBackup: autoBackup === true,
       };
-      await db.configuracoes.put(configParaSalvar);
+      await dbSaveWithBackup(
+        "configuracoes",
+        configParaSalvar,
+        autoBackup,
+        isSignedIn,
+        uploadBackup
+      );
       toast.success("Configurações da congregação salvas com sucesso!");
       setShowCongregacaoModal(false);
-      // TESTE DE BACKUP APÓS SALVAR
-      if (autoBackup === true && isSignedIn) {
-        try {
-          const backupData = await import("../utils/backup").then((m) =>
-            m.exportarDados()
-          );
-          const timestamp = new Date()
-            .toISOString()
-            .slice(0, 19)
-            .replace(/:/g, "-");
-          const fileName = `backup-auto-oradores-${timestamp}.json`;
-          await uploadBackup(JSON.stringify(backupData), fileName);
-          toast.success("Backup automático realizado após salvar!");
-        } catch (err) {
-          toast.error("Erro ao fazer backup automático após salvar");
-        }
-      }
     } catch (error) {
       console.error("Erro ao salvar configurações:", error);
       toast.error("Erro ao salvar configurações");
@@ -240,7 +239,14 @@ function ConfigPage() {
         )
       ) {
         setAutoBackup(true);
-        await db.configuracoes.put({ ...congregacao, autoBackup: true });
+        await dbSaveWithBackup(
+          "configuracoes",
+          { ...congregacao, autoBackup: true },
+          false, // Não fazer backup automático aqui para evitar loop
+          isSignedIn,
+          uploadBackup,
+          false // Não mostrar toast pois já vamos mostrar um customizado
+        );
         // Garante que o valor salvo é booleano
         const configAtualizada = await db.configuracoes.get(1);
         if (configAtualizada) {
@@ -257,7 +263,14 @@ function ConfigPage() {
         )
       ) {
         setAutoBackup(false);
-        await db.configuracoes.put({ ...congregacao, autoBackup: false });
+        await dbSaveWithBackup(
+          "configuracoes",
+          { ...congregacao, autoBackup: false },
+          false, // Não fazer backup automático aqui
+          isSignedIn,
+          uploadBackup,
+          false // Não mostrar toast pois já vamos mostrar um customizado
+        );
         // Garante que o valor salvo é booleano
         const configAtualizada = await db.configuracoes.get(1);
         if (configAtualizada) {
@@ -279,7 +292,14 @@ function ConfigPage() {
     }
     if (autoBackup) {
       setAutoBackup(false);
-      await db.configuracoes.put({ ...congregacao, autoBackup: false });
+      await dbSaveWithBackup(
+        "configuracoes",
+        { ...congregacao, autoBackup: false },
+        false, // Não fazer backup automático aqui
+        isSignedIn,
+        uploadBackup,
+        false // Não mostrar toast pois já vamos mostrar um customizado
+      );
       toast("Backup automático desativado.");
     }
     handleGoogleSignOut();
@@ -317,63 +337,69 @@ function ConfigPage() {
 
   // UI principal
   return (
-    <div className="p-2 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4 p-2 text-gray-800 flex items-center gap-2">
-        <span role="img" aria-label="Configurações">
-          ⚙️
-        </span>{" "}
-        Configurações
-      </h1>
-      <div className="space-y-1">
+    <div className="p-4 max-w-7xl mx-auto">
+      {/* header fixo */}
+      <div className="fixed top-0 left-0 right-0 bg-gradient-to-r from-purple-50 to-blue-50 p-4 shadow-md z-10 max-w-7xl mx-auto flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-100 rounded-lg">
+            <Settings className="w-6 h-6 text-purple-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">Configurações</h1>
+        </div>
+      </div>
+      {/* Espaço para compensar header fixo (aprox. altura do header) */}
+      <div className="h-15" />
+
+      <div className="space-y-6">
         {/* Configurações da Congregação */}
-        <section className="bg-white p-3 rounded-xl shadow flex flex-col gap-2 border border-gray-100">
-          <h3 className="font-semibold text-lg flex items-center gap-2">
-            <span role="img" aria-label="Congregação">
-              🏛️
-            </span>{" "}
+        <section className="bg-white p-6 rounded-lg shadow border border-gray-200">
+          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+            <Building className="w-5 h-5 text-purple-600" />
             Congregação
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-            <div>
-              <p className="text-gray-900">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-gray-900 font-medium">
                 {congregacao.nomeCongregacao} - {congregacao.cidade}
               </p>
             </div>
-
-            <div>
-              <p className="text-gray-900 capitalize">
+            <div className="bg-gray-50 p-3 rounded-lg">
+              <p className="text-gray-900 font-medium capitalize">
                 {congregacao.diaReuniao} - {congregacao.horarioReuniao}
               </p>
             </div>
           </div>
           <button
             onClick={() => setShowCongregacaoModal(true)}
-            className="w-full md:w-auto bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors self-end"
+            className="w-full md:w-auto bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
           >
+            <Settings className="w-4 h-4" />
             Editar Configurações
           </button>
         </section>
 
         {/* Backup e Sincronização */}
-        <section className="bg-white p-3 rounded-xl shadow flex flex-col gap-2 border border-gray-100">
-          <h3 className="font-semibold text-lg flex items-center gap-2 mb-2">
-            <span role="img" aria-label="Backup">
-              💾
-            </span>{" "}
+        <section className="bg-white p-6 rounded-lg shadow border border-gray-200">
+          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+            <HardDrive className="w-5 h-5 text-purple-600" />
             Backup & Sincronização
           </h3>
-          <div className="flex flex-col md:flex-row md:items-center gap-4">
-            <div className="flex-1 flex flex-col gap-2">
-              <p className="text-sm text-gray-600">Backup Local</p>
-              <div className="flex flex-wrap justify-center gap-2">
+          <div className="flex flex-col md:flex-row md:items-start gap-6">
+            <div className="flex-1">
+              <p className="text-sm text-gray-600 mb-3 font-medium">
+                Backup Local
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
                 <button
                   onClick={handleBackup}
                   disabled={backupLoading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
+                  <Download className="w-4 h-4" />
                   {backupLoading ? "Backup..." : "Backup"}
                 </button>
-                <label className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors cursor-pointer">
+                <label className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors cursor-pointer flex items-center gap-2">
+                  <Upload className="w-4 h-4" />
                   {importLoading ? "Importando..." : "Restaurar"}
                   <input
                     type="file"
@@ -385,71 +411,90 @@ function ConfigPage() {
                 </label>
               </div>
             </div>
-            <div className="flex-1 flex flex-col gap-2 border-gray-200">
-              <p className="text-sm text-gray-600 ">Google Drive</p>
-              <div className="flex gap-2 flex-wrap w-full">
+            <div className="flex-1 border-gray-200">
+              <p className="text-sm text-gray-600 mb-3 font-medium flex items-center gap-2">
+                <Cloud className="w-4 h-4" />
+                Google Drive
+              </p>
+              <div className="flex flex-col gap-3">
                 {isSignedIn && (
-                  <div className="flex flex-row gap-2 w-full">
+                  <div className="flex flex-col gap-2">
                     <button
                       onClick={handleBackupToDrive}
                       disabled={googleDriveLoading}
-                      className="flex-1 whitespace-normal bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                      {googleDriveLoading
-                        ? "Enviando..."
-                        : "💾 Backup no Drive"}
+                      <HardDrive className="w-4 h-4" />
+                      {googleDriveLoading ? "Enviando..." : "Backup no Drive"}
                     </button>
                     <button
                       onClick={handleRestoreFromDrive}
                       disabled={googleDriveLoading}
-                      className="flex-1 whitespace-normal bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
+                      <Download className="w-4 h-4" />
                       {googleDriveLoading
                         ? "Restaurando..."
-                        : "⭮ Restaurar do Drive"}
+                        : "Restaurar do Drive"}
                     </button>
                   </div>
                 )}
-              </div>
-              {isSignedIn && (
-                <button
-                  onClick={handleGoogleSignOutWithWarning}
-                  disabled={googleDriveLoading}
-                  className="mt-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full md:w-auto"
-                >
-                  {googleDriveLoading ? "Saindo..." : "🔌 Desconectar"}
-                </button>
-              )}
-              {!isSignedIn && (
-                <button
-                  onClick={handleGoogleSignIn}
-                  disabled={googleDriveLoading}
-                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {googleDriveLoading ? "Conectando..." : "🔗 Conectar"}
-                </button>
-              )}
-              <p className="text-xs text-gray-500 mt-1">
-                {isSignedIn
-                  ? "✅ Conectado ao Google Drive"
-                  : "❌ Não conectado ao Google Drive"}
-              </p>
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <p className="font-medium">Backup Automático</p>
-                  <p className="text-xs text-gray-500">
-                    Salva no Drive a cada alteração
-                  </p>
+                {isSignedIn && (
+                  <button
+                    onClick={handleGoogleSignOutWithWarning}
+                    disabled={googleDriveLoading}
+                    className="w-full bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    {googleDriveLoading ? "Saindo..." : "Desconectar"}
+                  </button>
+                )}
+                {!isSignedIn && (
+                  <button
+                    onClick={handleGoogleSignIn}
+                    disabled={googleDriveLoading}
+                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    <Link className="w-4 h-4" />
+                    {googleDriveLoading ? "Conectando..." : "Conectar"}
+                  </button>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  {isSignedIn ? (
+                    <>
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <span className="text-green-700">
+                        Conectado ao Google Drive
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <XCircle className="w-4 h-4 text-red-500" />
+                      <span className="text-red-700">
+                        Não conectado ao Google Drive
+                      </span>
+                    </>
+                  )}
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={autoBackup}
-                    onChange={handleToggleAutoBackup}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                </label>
+                <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      Backup Automático
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Salva no Drive a cada alteração
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoBackup}
+                      onChange={handleToggleAutoBackup}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
               </div>
             </div>
           </div>
@@ -458,102 +503,150 @@ function ConfigPage() {
 
       {/* Modal de Configurações da Congregação */}
       {showCongregacaoModal && (
-        <div className="fixed inset-0 bg-gradient-to-br from-purple-900 to-indigo-900 bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md mx-4 border-4 border-gradient-to-r from-pink-500 to-purple-500 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-2xl font-bold mb-4 text-gray-800">
-              Configurações da Congregação
-            </h3>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Nome da Congregação
-                </label>
-                <input
-                  type="text"
-                  value={congregacao.nomeCongregacao}
-                  onChange={(e) =>
-                    setCongregacao({
-                      ...congregacao,
-                      nomeCongregacao: e.target.value,
-                    })
-                  }
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Digite o nome da congregação"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dia da Reunião
-                </label>
-                <select
-                  value={congregacao.diaReuniao}
-                  onChange={(e) =>
-                    setCongregacao({
-                      ...congregacao,
-                      diaReuniao: e.target.value,
-                    })
-                  }
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Building className="w-6 h-6" />
+                  <div>
+                    <h2 className="text-xl font-bold">
+                      Configurações da Congregação
+                    </h2>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowCongregacaoModal(false)}
+                  className="p-2 hover:bg-white/20 rounded-full transition-colors"
                 >
-                  <option value="domingo">Domingo</option>
-                  <option value="segunda">Segunda-feira</option>
-                  <option value="terca">Terça-feira</option>
-                  <option value="quarta">Quarta-feira</option>
-                  <option value="quinta">Quinta-feira</option>
-                  <option value="sexta">Sexta-feira</option>
-                  <option value="sabado">Sábado</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Horário da Reunião
-                </label>
-                <input
-                  type="time"
-                  value={congregacao.horarioReuniao}
-                  onChange={(e) =>
-                    setCongregacao({
-                      ...congregacao,
-                      horarioReuniao: e.target.value,
-                    })
-                  }
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cidade - Estado
-                </label>
-                <input
-                  type="text"
-                  value={congregacao.cidade}
-                  onChange={(e) =>
-                    setCongregacao({ ...congregacao, cidade: e.target.value })
-                  }
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  placeholder="Digite a cidade"
-                />
+                  <X className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-2 mt-6">
-              <button
-                onClick={handleSaveCongregacao}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-md hover:from-purple-600 hover:to-purple-700 transition-all transform hover:scale-105 disabled:opacity-50"
-                disabled={isSavingCongregacao}
-              >
-                {isSavingCongregacao ? "Salvando..." : "Salvar"}
-              </button>
-              <button
-                onClick={() => setShowCongregacaoModal(false)}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white rounded-md hover:from-gray-600 hover:to-gray-700 transition-all transform hover:scale-105"
-              >
-                Cancelar
-              </button>
+            <div className="p-6 space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Building className="w-4 h-4" />
+                  Nome da Congregação
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={congregacao.nomeCongregacao}
+                    onChange={(e) =>
+                      setCongregacao({
+                        ...congregacao,
+                        nomeCongregacao: e.target.value,
+                      })
+                    }
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Digite o nome da congregação"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Dia da Reunião
+                </label>
+                <div className="relative">
+                  <Settings className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <select
+                    value={congregacao.diaReuniao}
+                    onChange={(e) =>
+                      setCongregacao({
+                        ...congregacao,
+                        diaReuniao: e.target.value,
+                      })
+                    }
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="domingo">Domingo</option>
+                    <option value="segunda">Segunda-feira</option>
+                    <option value="terca">Terça-feira</option>
+                    <option value="quarta">Quarta-feira</option>
+                    <option value="quinta">Quinta-feira</option>
+                    <option value="sexta">Sexta-feira</option>
+                    <option value="sabado">Sábado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Horário da Reunião
+                </label>
+                <div className="relative">
+                  <Settings className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <input
+                    type="time"
+                    value={congregacao.horarioReuniao}
+                    onChange={(e) =>
+                      setCongregacao({
+                        ...congregacao,
+                        horarioReuniao: e.target.value,
+                      })
+                    }
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Building className="w-4 h-4" />
+                  Cidade - Estado
+                </label>
+                <div className="relative">
+                  <Building className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={congregacao.cidade}
+                    onChange={(e) =>
+                      setCongregacao({ ...congregacao, cidade: e.target.value })
+                    }
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    placeholder="Digite a cidade"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveCongregacao}
+                  className={`flex-1 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
+                    isSavingCongregacao
+                      ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                      : "bg-purple-600 text-white hover:bg-purple-700"
+                  }`}
+                  disabled={isSavingCongregacao}
+                >
+                  {isSavingCongregacao ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Salvar
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setShowCongregacaoModal(false)}
+                  className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors font-medium flex items-center justify-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancelar
+                </button>
+              </div>
             </div>
           </div>
         </div>

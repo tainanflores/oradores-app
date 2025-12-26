@@ -45,7 +45,13 @@ export interface SaidaOrador {
 export interface DataEspecial {
   id?: number;
   data: string;
-  tipo: "assembleia" | "congresso" | "celebracao" | "evento_transmitido";
+  tipo:
+    | "assembleia"
+    | "congresso"
+    | "celebracao"
+    | "discurso_especial"
+    | "evento_transmitido"
+    | "visita_viajante";
 }
 
 export interface TemaBloqueado {

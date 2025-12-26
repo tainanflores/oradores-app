@@ -7,6 +7,7 @@ import {
 } from "react";
 import { db, type Configuracao } from "../database";
 import { dbSaveWithBackup } from "../utils/dbWithBackup";
+import { useGoogleDriveAuth } from "./GoogleDriveAuthContext";
 import toast from "react-hot-toast";
 
 interface ConfigContextType {
@@ -24,6 +25,9 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
   const [congregacao, setCongregacao] = useState<Configuracao | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [showConfigModal, setShowConfigModal] = useState(false);
+
+  // Obter valores do contexto GoogleDriveAuth
+  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
 
   useEffect(() => {
     async function checkConfig() {
@@ -67,9 +71,8 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       "configuracoes",
       c,
       c.autoBackup,
-      // Aqui você pode obter isSignedIn e uploadBackup do contexto GoogleDriveAuth
-      false, // ajuste para pegar do contexto
-      async () => "" // ajuste para pegar do contexto
+      isSignedIn,
+      uploadBackup
     );
     setCongregacao(c);
     setShowConfigModal(false);

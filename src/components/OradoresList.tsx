@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"; // Hooks para estado e efeitos
 import { db, type Orador, type Discurso } from "../database"; // Importa banco e tipos
 import OradorCard from "./OradorCard"; // Componente do card
 import ModalOrador from "./ModalOrador"; // Modal de detalhes do orador
+import { Users, Plus, Search } from "lucide-react";
 
 function OradoresList() {
   const [oradores, setOradores] = useState<Orador[]>([]);
@@ -48,49 +49,71 @@ function OradoresList() {
   return (
     <div className="flex flex-col">
       {/* Cabeçalho fixo */}
-      <div className="sticky top-0 bg-white z-10 pb-4 border-b border-gray-200 p-4">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800">👥 Oradores</h1>
+      <div className="fixed top-0 left-0 right-0 bg-gradient-to-r from-purple-50 to-blue-50 p-4 shadow-md z-10 max-w-7xl mx-auto flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-100 rounded-lg">
+            <Users className="w-6 h-6 text-purple-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">Oradores</h1>
+        </div>
+      </div>
+      {/* Espaço para compensar header fixo */}
+      <div className="h-15" />
 
+      {/* Controles */}
+      <div className="p-4 space-y-4">
         {/* Checkbox para mostrar inativos */}
-        <div className="mb-4">
-          <label className="flex items-center">
+        <div className="flex items-center">
+          <label className="flex items-center cursor-pointer">
             <input
               type="checkbox"
               checked={showInativos}
               onChange={(e) => setShowInativos(e.target.checked)}
-              className="mr-2"
+              className="mr-3 w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
             />
-            Mostrar oradores inativos
+            <span className="text-sm font-medium text-gray-700">
+              Mostrar oradores inativos
+            </span>
           </label>
         </div>
 
-        {/* Busca por nome */}
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Buscar por nome"
-            value={searchNome}
-            onChange={(e) => setSearchNome(e.target.value)}
-            className="p-2 border border-gray-300 rounded w-full max-w-md"
-          />
-        </div>
-
-        <div className="flex gap-2 justify-around md:justify-start">
+        {/* Busca e botão adicionar */}
+        <div className="flex gap-3">
+          <div className="relative flex-1 max-w-md">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="w-4 h-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Buscar por nome"
+              value={searchNome}
+              onChange={(e) => setSearchNome(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
+            />
+          </div>
           <button
             onClick={() => openModal(null)}
-            className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex items-center justify-center w-11 h-11 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+            title="Adicionar orador"
           >
-            ➕ Adicionar
+            <Plus className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {/* Lista scrollável */}
-      <div className="overflow-y-auto max-h-96">
+      <div className="flex-1 overflow-y-auto">
         {filteredOradores.length === 0 ? (
-          <p className="text-gray-500 p-4">Nenhum orador encontrado.</p>
+          <div className="flex flex-col items-center justify-center py-12 px-4">
+            <Users className="w-12 h-12 text-gray-400 mb-4" />
+            <p className="text-gray-500 text-center">
+              {searchNome
+                ? "Nenhum orador encontrado com este nome."
+                : "Nenhum orador cadastrado."}
+            </p>
+          </div>
         ) : (
-          <ul className="list-none p-0">
+          <div className="p-4 space-y-3">
             {filteredOradores.map((orador) => (
               <OradorCard
                 key={orador.id}
@@ -100,7 +123,7 @@ function OradoresList() {
                 isAtivo={orador.ativo}
               />
             ))}
-          </ul>
+          </div>
         )}
       </div>
 

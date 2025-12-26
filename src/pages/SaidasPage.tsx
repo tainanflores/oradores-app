@@ -14,6 +14,18 @@ import ModalSelecionarDiscursos from "../components/ModalSelecionarDiscursos";
 import { dbSaveWithBackup } from "../utils/dbWithBackup";
 import { useConfig } from "../contexts/ConfigContext";
 import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
+import {
+  Plane,
+  Plus,
+  Calendar,
+  History,
+  User,
+  BookOpen,
+  MapPin,
+  X,
+  Save,
+  Link,
+} from "lucide-react";
 
 interface ModalSaidaProps {
   isOpen: boolean;
@@ -246,9 +258,13 @@ function ModalSaida({
       db.temas.filter((tema) => tema.ativo).toArray(),
       db.oradorTemas.toArray(),
     ]);
+    console.log(oradorTemasData);
     oradoresRef.current = oradoresData;
     temasRef.current = temasData;
     oradorTemasRef.current = oradorTemasData;
+
+    // 🔥 FORÇA reprocessar os temas do orador
+    setDataReloadTrigger((prev) => prev + 1);
 
     // Encontrar e selecionar o orador recém-criado
     const novoOrador = oradoresData.find((o) => o.id === oradorId);
@@ -267,6 +283,7 @@ function ModalSaida({
 
   const handleSelecionarDiscursos = (discursosSelecionados: Tema[]) => {
     // Ordena os discursos selecionados pelo número do tema
+    console.log(discursosSelecionados);
     const discursosOrdenados = [...discursosSelecionados].sort(
       (a, b) => a.numero - b.numero
     );
@@ -347,45 +364,57 @@ function ModalSaida({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg w-full max-w-md mx-4">
-        <div className="p-4 border-b border-gray-200">
+      <div className="bg-white rounded-lg w-full max-w-md mx-4 overflow-hidden">
+        <div className="bg-gradient-to-r from-purple-500 to-purple-600 text-white p-4 shadow-lg">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-gray-800">
-              🚗 {saidaExistente ? "Editar" : "Registrar"} Saída
-            </h2>
+            <div className="flex items-center gap-3">
+              <Plane className="w-6 h-6" />
+              <div>
+                <h2 className="text-xl font-bold">
+                  {saidaExistente ? "Editar" : "Registrar"} Saída
+                </h2>
+              </div>
+            </div>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors text-xl font-bold"
+              className="p-2 hover:bg-white/20 rounded-full transition-colors"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
+        <div className="p-6 space-y-6">
           {/* Buscar Orador */}
-          <div className="relative">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <User className="w-4 h-4" />
+              Orador
+            </label>
             <div className="flex gap-2">
               <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={buscaOrador}
-                  onChange={(e) => {
-                    setBuscaOrador(e.target.value);
-                    setShowOradorDropdown(true);
-                  }}
-                  onFocus={() => setShowOradorDropdown(true)}
-                  placeholder="Digite o nome do orador..."
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    value={buscaOrador}
+                    onChange={(e) => {
+                      setBuscaOrador(e.target.value);
+                      setShowOradorDropdown(true);
+                    }}
+                    onFocus={() => setShowOradorDropdown(true)}
+                    placeholder="Digite o nome do orador..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
                 {showOradorDropdown && buscaOrador && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
                     {oradoresFiltrados.length > 0 ? (
                       oradoresFiltrados.map((orador) => (
                         <div
                           key={orador.id}
                           onClick={() => handleSelectOrador(orador)}
-                          className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                          className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
                         >
                           <div className="font-medium">{orador.nome}</div>
                           <div className="text-sm text-gray-500">
@@ -394,7 +423,7 @@ function ModalSaida({
                         </div>
                       ))
                     ) : (
-                      <div className="p-2 text-gray-500 text-sm">
+                      <div className="p-3 text-gray-500 text-sm">
                         Nenhum orador encontrado
                       </div>
                     )}
@@ -403,10 +432,10 @@ function ModalSaida({
               </div>
               <button
                 onClick={handleAdicionarOrador}
-                className="px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
                 title="Adicionar novo orador"
               >
-                ➕
+                <Plus className="w-5 h-5" />
               </button>
             </div>
           </div>
@@ -414,36 +443,41 @@ function ModalSaida({
           {/* Selecionar Tema */}
           {selectedOrador && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <BookOpen className="w-4 h-4" />
                 Tema
               </label>
               <div className="flex gap-2 items-end">
-                <select
-                  value={selectedTema}
-                  onChange={(e) =>
-                    setSelectedTema(
-                      e.target.value ? Number(e.target.value) : ""
-                    )
-                  }
-                  className="flex-1 min-w-0 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                >
-                  <option value="">Selecione um tema</option>
-                  {temasDoOrador.map((tema) => (
-                    <option key={tema.id} value={tema.id}>
-                      {tema.numero}. {tema.titulo}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex-1 relative">
+                  <BookOpen className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+                  <select
+                    value={selectedTema}
+                    onChange={(e) =>
+                      setSelectedTema(
+                        e.target.value ? Number(e.target.value) : ""
+                      )
+                    }
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none"
+                  >
+                    <option value="">Selecione um tema</option>
+                    {temasDoOrador.map((tema) => (
+                      <option key={tema.id} value={tema.id}>
+                        {tema.numero}. {tema.titulo}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <button
                   onClick={handleVincularTema}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  className="p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   title="Vincular novo tema"
                 >
-                  🔗
+                  <Link className="w-5 h-5" />
                 </button>
               </div>
               {temasDoOrador.length === 0 && (
-                <p className="text-sm text-orange-600 mt-1">
+                <p className="text-sm text-orange-600 mt-2 flex items-center gap-1">
+                  <BookOpen className="w-4 h-4" />
                   Este orador não tem temas vinculados. Clique em 🔗 para
                   vincular.
                 </p>
@@ -453,62 +487,91 @@ function ModalSaida({
 
           {/* Data */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
               Data da Saída
             </label>
-            <input
-              type="date"
-              value={dataSelecionada}
-              onChange={(e) => setDataSelecionada(e.target.value)}
-              min={format(new Date(), "yyyy-MM-dd")}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+              <input
+                type="date"
+                value={dataSelecionada}
+                onChange={(e) => setDataSelecionada(e.target.value)}
+                min={format(new Date(), "yyyy-MM-dd")}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Congregação Destino */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
               Congregação de Destino
             </label>
-            <input
-              type="text"
-              value={congregacaoDestino}
-              onChange={(e) => setCongregacaoDestino(e.target.value)}
-              placeholder="Nome da congregação"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+              <input
+                type="text"
+                value={congregacaoDestino}
+                onChange={(e) => setCongregacaoDestino(e.target.value)}
+                placeholder="Nome da congregação"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Cidade */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <MapPin className="w-4 h-4" />
               Cidade
             </label>
-            <input
-              type="text"
-              value={cidade}
-              onChange={(e) => setCidade(e.target.value)}
-              placeholder="Nome da cidade"
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+            <div className="relative">
+              <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
+              <input
+                type="text"
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
+                placeholder="Nome da cidade"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-200 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 bg-gray-500 text-white py-2 px-4 rounded-md hover:bg-gray-600 transition-colors"
-            disabled={loading}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSalvar}
-            className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700 transition-colors disabled:opacity-50"
-            disabled={loading}
-          >
-            {loading ? "Salvando..." : saidaExistente ? "Atualizar" : "Salvar"}
-          </button>
+        <div className="p-6 border-t border-gray-200 bg-gray-50">
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="flex-1 bg-gray-500 text-white py-3 px-4 rounded-lg hover:bg-gray-600 transition-colors font-medium flex items-center justify-center gap-2"
+              disabled={loading}
+            >
+              <X className="w-4 h-4" />
+              Cancelar
+            </button>
+            <button
+              onClick={handleSalvar}
+              className={`flex-1 py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
+                loading
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed"
+                  : "bg-purple-600 text-white hover:bg-purple-700"
+              }`}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  {saidaExistente ? "Atualizar" : "Salvar"}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -626,19 +689,28 @@ function SaidasPage() {
   const saidasPassadasPorMes = agruparSaidasPorMes(saidasPassadas);
 
   return (
-    <div className="p-1 max-w-6xl mx-auto">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">🚗 Saídas</h1>
+    <div className="p-4 max-w-7xl mx-auto">
+      {/* header fixo */}
+      <div className="fixed top-0 left-0 right-0 bg-gradient-to-r from-purple-50 to-blue-50 p-4 shadow-md z-10 max-w-7xl mx-auto flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-purple-100 rounded-lg">
+            <Plane className="w-6 h-6 text-purple-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-800">Saídas</h1>
+        </div>
         <button
           onClick={() => {
             setSaidaSelecionada(undefined);
             setModalOpen(true);
           }}
-          className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors"
+          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
         >
-          + Registrar Saída
+          <Plus size={16} />
+          Registrar Saída
         </button>
       </div>
+      {/* Espaço para compensar header fixo (aprox. altura do header) */}
+      <div className="h-15" />
 
       {loading ? (
         <div className="text-center py-8">
@@ -648,9 +720,10 @@ function SaidasPage() {
       ) : (
         <div className="space-y-3">
           {/* Saídas Futuras */}
-          <div className="bg-white p-1 rounded-lg shadow">
-            <h3 className="text-lg font-semibold mb-2 text-green-700">
-              📅 Próximas Saídas
+          <div className="bg-white p-4 rounded-lg shadow">
+            <h3 className="text-lg font-semibold mb-4 text-green-700 flex items-center gap-2">
+              <Calendar className="w-5 h-5" />
+              Próximas Saídas
             </h3>
             {saidasFuturas.length === 0 ? (
               <p className="text-gray-500">Nenhuma saída agendada</p>
@@ -666,7 +739,7 @@ function SaidasPage() {
                         <div
                           key={saida.id}
                           onClick={() => handleEditarSaida(saida)}
-                          className="p-3 bg-purple-50 rounded-lg border border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer"
+                          className="p-3 bg-green-50 rounded-lg border border-green-200 hover:bg-green-100 transition-colors cursor-pointer"
                         >
                           <div className="flex justify-between items-center">
                             <span className="font-medium text-green-800">
@@ -693,9 +766,10 @@ function SaidasPage() {
 
           {/* Saídas Passadas */}
           {saidasPassadas.length > 0 && (
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-4 text-gray-700">
-                📚 Histórico de Saídas
+            <div className="bg-white p-4 rounded-lg shadow">
+              <h3 className="text-lg font-semibold mb-4 text-gray-700 flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Histórico de Saídas
               </h3>
               <div className="space-y-6">
                 {saidasPassadasPorMes.map(({ mes, nomeMes, saidas }) => (
