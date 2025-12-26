@@ -11,6 +11,7 @@ import DatasEspeciaisPage from "./pages/DatasEspeciaisPage";
 import ConfigPage from "./pages/ConfigPage";
 import BottomNavigation from "./components/navigation/BottomNavigation";
 import GoogleDriveStatusBar from "./components/GoogleDriveStatusBar";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 import "./App.css";
 
@@ -140,6 +141,7 @@ function AppContent() {
           <BottomNavigation />
         </div>
         <GoogleDriveStatusBar autoBackup={!!congregacao?.autoBackup} />
+        <PWAInstallPrompt />
         <Toaster
           position="top-center"
           toastOptions={{
