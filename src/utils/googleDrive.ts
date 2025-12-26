@@ -79,7 +79,11 @@ export async function silentSignIn(): Promise<boolean> {
       }
     };
 
-    tokenClient.requestAccessToken({ prompt: "none" });
+    try {
+      tokenClient.requestAccessToken({ prompt: "" });
+    } catch {
+      resolve(false);
+    }
   });
 }
 
