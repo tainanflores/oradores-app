@@ -1,6 +1,6 @@
 /* =====================================================
-   Google Drive Backup Service (OAuth Correto)
-   React + Vite | Google Identity Services
+   Google Drive Backup Service
+   React + Vite | Google Identity Services (GSI)
    ===================================================== */
 
 const CLIENT_ID =
@@ -8,71 +8,87 @@ const CLIENT_ID =
 
 const SCOPES = "https://www.googleapis.com/auth/drive.appdata";
 
-let tokenClient: any = null;
-let gapiInited = false;
-let gisInited = false;
+/* =====================================================
+   INTERNAL STATE
+   ===================================================== */
+let tokenClient: google.accounts.oauth2.TokenClient | null = null;
 let accessToken: string | null = null;
+let initPromise: Promise<void> | null = null;
 
 /* =====================================================
-   LOAD APIs
+   LOAD GOOGLE APIS (singleton)
    ===================================================== */
-export function loadGoogleAPI(): Promise<void> {
+function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    // @ts-ignore
-    gapi.load("client", async () => {
-      try {
-        // @ts-ignore
-        await gapi.client.init({
-          discoveryDocs: [
-            "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
-          ],
-        });
-        gapiInited = true;
-        maybeResolve();
-      } catch (e) {
-        reject(e);
-      }
-    });
+    if (document.querySelector(`script[src="${src}"]`)) {
+      resolve();
+      return;
+    }
 
     const script = document.createElement("script");
-    script.src = "https://accounts.google.com/gsi/client";
+    script.src = src;
     script.async = true;
     script.defer = true;
-
-    script.onload = () => {
-      // @ts-ignore
-      tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: () => {},
-      });
-      gisInited = true;
-      maybeResolve();
-    };
-
-    script.onerror = () =>
-      reject(new Error("Erro ao carregar Google Identity"));
-
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Erro ao carregar script: ${src}`));
     document.head.appendChild(script);
-
-    function maybeResolve() {
-      if (gapiInited && gisInited) resolve();
-    }
   });
 }
 
+export function loadGoogleAPI(): Promise<void> {
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    // Google API client
+    await loadScript("https://apis.google.com/js/api.js");
+    // @ts-ignore
+    await new Promise<void>((resolve) => gapi.load("client", resolve));
+    // @ts-ignore
+    await gapi.client.init({
+      discoveryDocs: [
+        "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest",
+      ],
+    });
+
+    // Google Identity Services
+    await loadScript("https://accounts.google.com/gsi/client");
+    // @ts-ignore
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: () => {},
+    });
+  })();
+
+  return initPromise;
+}
+
 /* =====================================================
-   LOGIN SILENCIOSO (CHAVE DO PROBLEMA)
+   AUTH HELPERS
+   ===================================================== */
+function setSession(token: string) {
+  accessToken = token;
+  // @ts-ignore
+  gapi.client.setToken({ access_token: token });
+}
+
+function clearSession() {
+  accessToken = null;
+  // @ts-ignore
+  gapi.client.setToken(null);
+}
+
+/* =====================================================
+   SILENT SIGN-IN
    ===================================================== */
 export async function silentSignIn(): Promise<boolean> {
-  if (!tokenClient) await loadGoogleAPI();
+  await loadGoogleAPI();
+  if (!tokenClient) return false;
 
   return new Promise((resolve) => {
-    tokenClient.callback = (resp: any) => {
+    tokenClient!.callback = (resp: any) => {
       if (resp?.access_token) {
-        accessToken = resp.access_token;
-        // @ts-ignore
-        gapi.client.setToken({ access_token: accessToken });
+        setSession(resp.access_token);
         resolve(true);
       } else {
         resolve(false);
@@ -80,7 +96,7 @@ export async function silentSignIn(): Promise<boolean> {
     };
 
     try {
-      tokenClient.requestAccessToken({ prompt: "" });
+      tokenClient!.requestAccessToken({ prompt: "" });
     } catch {
       resolve(false);
     }
@@ -88,33 +104,32 @@ export async function silentSignIn(): Promise<boolean> {
 }
 
 /* =====================================================
-   LOGIN MANUAL
+   MANUAL SIGN-IN
    ===================================================== */
 export async function signInGoogleDrive(): Promise<void> {
-  if (!tokenClient) await loadGoogleAPI();
+  await loadGoogleAPI();
+  if (!tokenClient) throw new Error("Token client não inicializado");
 
   return new Promise((resolve, reject) => {
-    let timeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       reject(
         new Error(
-          "O login do Google não foi concluído. Verifique se o navegador está bloqueando pop-ups e permita pop-ups para este site."
+          "Login do Google não concluído. Verifique bloqueio de pop-ups."
         )
       );
-    }, 15000); // 15 segundos
+    }, 15000);
 
-    tokenClient.callback = (resp: any) => {
+    tokenClient!.callback = (resp: any) => {
       clearTimeout(timeout);
       if (resp?.access_token) {
-        accessToken = resp.access_token;
-        // @ts-ignore
-        gapi.client.setToken({ access_token: accessToken });
+        setSession(resp.access_token);
         resolve();
       } else {
         reject(resp);
       }
     };
 
-    tokenClient.requestAccessToken({ prompt: "consent" });
+    tokenClient!.requestAccessToken({ prompt: "consent" });
   });
 }
 
@@ -122,11 +137,7 @@ export async function signInGoogleDrive(): Promise<void> {
    STATUS
    ===================================================== */
 export function isGoogleDriveSignedIn(): boolean {
-  return (
-    accessToken !== null &&
-    // @ts-ignore
-    gapi.client.getToken() !== null
-  );
+  return !!accessToken;
 }
 
 /* =====================================================
@@ -137,9 +148,7 @@ export function signOutGoogleDrive(): void {
 
   // @ts-ignore
   google.accounts.oauth2.revoke(accessToken);
-  accessToken = null;
-  // @ts-ignore
-  gapi.client.setToken(null);
+  clearSession();
 }
 
 /* =====================================================
@@ -183,12 +192,15 @@ export async function uploadBackupToDrive(
 }
 
 /* =====================================================
-   LISTAR E BAIXAR BACKUPS DO DRIVE
+   LIST BACKUPS
    ===================================================== */
 export async function listBackupsFromDrive(): Promise<
   Array<{ id: string; name: string; createdTime: string }>
 > {
-  if (!isGoogleDriveSignedIn()) throw new Error("Google Drive não conectado");
+  if (!isGoogleDriveSignedIn()) {
+    throw new Error("Google Drive não conectado");
+  }
+
   // @ts-ignore
   const res = await gapi.client.drive.files.list({
     spaces: "appDataFolder",
@@ -196,15 +208,23 @@ export async function listBackupsFromDrive(): Promise<
     orderBy: "createdTime desc",
     q: "mimeType='application/json' and name contains 'backup'",
   });
+
   return res.result.files || [];
 }
 
+/* =====================================================
+   DOWNLOAD BACKUP
+   ===================================================== */
 export async function downloadBackupFromDrive(fileId: string): Promise<any> {
-  if (!isGoogleDriveSignedIn()) throw new Error("Google Drive não conectado");
+  if (!isGoogleDriveSignedIn()) {
+    throw new Error("Google Drive não conectado");
+  }
+
   // @ts-ignore
   const res = await gapi.client.drive.files.get({
     fileId,
     alt: "media",
   });
+
   return res.result;
 }
