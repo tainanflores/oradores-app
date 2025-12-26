@@ -47,6 +47,40 @@ function AgendaPage() {
   const [discursoSelecionado, setDiscursoSelecionado] =
     useState<Discurso | null>(null);
   const [periodOffset, setPeriodOffset] = useState(0); // Offset em meses para navegação (0 = atual)
+  const [dataReloadTrigger, setDataReloadTrigger] = useState(0);
+
+  const loadAllData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [
+        discursosData,
+        oradoresData,
+        temasData,
+        configData,
+        datasEspeciaisData,
+      ] = await Promise.all([
+        db.discursos.toArray(),
+        db.oradores.toArray(),
+        db.temas.toArray(),
+        db.configuracoes.get(1),
+        db.datasEspeciais.toArray(),
+      ]);
+
+      setDiscursos(discursosData);
+      setOradores(oradoresData);
+      setTemas(temasData);
+      setConfiguracao(configData || null);
+      setDatasEspeciais(datasEspeciaisData);
+    } catch (e) {
+      console.error("Erro ao carregar dados", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData, dataReloadTrigger]);
 
   const getIconTipo = (tipo: string) => {
     switch (tipo) {
@@ -66,38 +100,6 @@ function AgendaPage() {
         return <Target className="w-4 h-4 text-gray-600" />;
     }
   };
-
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [
-          discursosData,
-          oradoresData,
-          temasData,
-          configData,
-          datasEspeciaisData,
-        ] = await Promise.all([
-          db.discursos.toArray(),
-          db.oradores.toArray(),
-          db.temas.toArray(),
-          db.configuracoes.get(1),
-          db.datasEspeciais.toArray(),
-        ]);
-
-        setDiscursos(discursosData);
-        setOradores(oradoresData);
-        setTemas(temasData);
-        setConfiguracao(configData || null);
-        setDatasEspeciais(datasEspeciaisData);
-      } catch (error) {
-        console.error("Erro ao carregar dados:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
 
   // Funções para navegação de período
   const handlePrevPeriod = () => {
@@ -157,18 +159,6 @@ function AgendaPage() {
   const handleAdicionarDataEspecial = () => {
     setModalDatasEspeciaisOpen(true);
   };
-
-  const handleReloadData = useCallback(async () => {
-    const discursosData = await db.discursos.toArray();
-    const datasEspeciaisData = await db.datasEspeciais.toArray();
-    setDiscursos(discursosData);
-    setDatasEspeciais(datasEspeciaisData);
-    // Também recarregar oradores e temas para garantir que temos os dados atualizados
-    const oradoresData = await db.oradores.toArray();
-    const temasData = await db.temas.toArray();
-    setOradores(oradoresData);
-    setTemas(temasData);
-  }, []);
 
   // Função para verificar se um dia deve estar ocupado por data especial
   const isDiaOcupadoPorDataEspecial = (dia: Date): boolean => {
@@ -577,14 +567,18 @@ function AgendaPage() {
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         dataSelecionada={dataSelecionada}
-        onSave={handleReloadData}
         discursoExistente={discursoSelecionado}
+        onSave={() => {
+          // 🔥 Trigger reload da página inteira
+          setDataReloadTrigger((prev) => prev + 1);
+          setModalOpen(false);
+        }}
       />
 
       <ModalDatasEspeciais
         isOpen={modalDatasEspeciaisOpen}
         onClose={() => setModalDatasEspeciaisOpen(false)}
-        onSave={handleReloadData}
+        onSave={loadAllData}
       />
     </div>
   );

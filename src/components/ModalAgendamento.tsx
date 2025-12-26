@@ -50,7 +50,6 @@ function ModalAgendamento({
   const [showModalOrador, setShowModalOrador] = useState(false);
   const [showModalSelecaoDiscursos, setShowModalSelecaoDiscursos] =
     useState(false);
-  const [dataReloadTrigger, setDataReloadTrigger] = useState(0);
   const [temasDoOrador, setTemasDoOrador] = useState<Tema[]>([]);
   const [ultimoDiscurso, setUltimoDiscurso] = useState<{
     data: string;
@@ -62,23 +61,39 @@ function ModalAgendamento({
   } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
 
+  const [temas, setTemas] = useState<Tema[]>([]);
+  const [oradorTemas, setOradorTemas] = useState<OradorTema[]>([]);
+  const [dataReloadTrigger, setDataReloadTrigger] = useState(0);
+
   const { congregacao } = useConfig();
   const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
+
   // Carregar dados quando o modal abre ou quando há trigger de reload
   useEffect(() => {
-    if (isOpen) {
-      const loadData = async () => {
-        const [oradoresData, temasData, oradorTemasData] = await Promise.all([
-          db.oradores.filter((orador) => orador.ativo).toArray(),
-          db.temas.filter((tema) => tema.ativo).toArray(),
-          db.oradorTemas.toArray(),
-        ]);
-        oradoresRef.current = oradoresData;
-        temasRef.current = temasData;
-        oradorTemasRef.current = oradorTemasData;
-      };
-      loadData();
-    }
+    if (!isOpen) return;
+
+    const loadData = async () => {
+      const [oradoresData, temasData, oradorTemasData] = await Promise.all([
+        db.oradores.filter((o) => o.ativo).toArray(),
+        db.temas.filter((t) => t.ativo).toArray(),
+        db.oradorTemas.toArray(),
+      ]);
+
+      setTemas(temasData);
+      setOradorTemas(oradorTemasData);
+
+      // Atualizar refs para consistência
+      oradoresRef.current = oradoresData;
+      temasRef.current = temasData;
+      oradorTemasRef.current = oradorTemasData;
+
+      // Atualizar refs para consistência
+      oradoresRef.current = oradoresData;
+      temasRef.current = temasData;
+      oradorTemasRef.current = oradorTemasData;
+    };
+
+    loadData();
   }, [isOpen, dataReloadTrigger]);
 
   // Limpar campos quando modal fechar
@@ -94,24 +109,6 @@ function ModalAgendamento({
       setIsEditing(false);
     }
   }, [isOpen]);
-
-  // Preencher campos quando há discurso existente
-  useEffect(() => {
-    if (isOpen && discursoExistente) {
-      // Aguardar um pouco para garantir que os dados foram carregados
-      const timer = setTimeout(() => {
-        const orador = oradoresRef.current.find(
-          (o) => o.id === discursoExistente.oradorId
-        );
-        if (orador) {
-          setSelectedOrador(orador);
-          setBuscaOrador(orador.nome);
-          setSelectedTema(discursoExistente.temaId);
-        }
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, discursoExistente]);
 
   // Buscar último e próximo discursos sempre que o orador for selecionado
   useEffect(() => {
@@ -173,11 +170,6 @@ function ModalAgendamento({
 
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
-  };
-
-  const handleReloadData = () => {
-    // Trigger reload dos dados incrementando o contador
-    setDataReloadTrigger((prev) => prev + 1);
   };
 
   // Fechar dropdown ao clicar fora
@@ -274,44 +266,56 @@ function ModalAgendamento({
     return palavrasBusca.every((palavra) => nomeNormalizado.includes(palavra));
   });
 
-  // Atualizar lista de temas quando o orador ou dados mudam
   useEffect(() => {
-    if (selectedOrador) {
-      const temas = (
-        oradorTemasRef.current
-          .filter((ot) => ot.oradorId === selectedOrador.id)
-          .map((ot) => temasRef.current.find((t) => t.id === ot.temaId))
-          .filter(Boolean) as Tema[]
-      ).sort((a, b) => a.numero - b.numero);
-      setTemasDoOrador(temas);
-    } else {
+    if (!selectedOrador) {
       setTemasDoOrador([]);
+      return;
     }
-  }, [selectedOrador, dataReloadTrigger]);
 
-  const handleSelectOrador = (orador: Orador) => {
-    setSelectedOrador(orador);
-    setBuscaOrador(orador.nome);
-    setShowOradorDropdown(false);
-    setSelectedTema(""); // Reset tema quando mudar orador
-  };
+    const temasVinculados = oradorTemas
+      .filter((ot) => ot.oradorId === selectedOrador.id)
+      .map((ot) => temas.find((t) => t.id === ot.temaId))
+      .filter(Boolean) as Tema[];
+
+    setTemasDoOrador(temasVinculados.sort((a, b) => a.numero - b.numero));
+  }, [selectedOrador, oradorTemas, temas, dataReloadTrigger]);
 
   const handleAdicionarOrador = () => {
     setShowModalOrador(true);
   };
 
+  const handleReloadData = () => {
+    // Trigger reload dos dados incrementando o contador
+    setDataReloadTrigger((prev) => prev + 1);
+  };
+
+  const handleSelectOrador = (orador: Orador) => {
+    setSelectedOrador(orador);
+    setBuscaOrador(orador.nome);
+    setShowOradorDropdown(false);
+    setSelectedTema(""); // limpa o tema ao trocar de orador
+  };
+
   const handleOradorCreated = async (oradorId: number) => {
-    // Recarregar dados para incluir o novo orador
+    // 1. Recarregar tudo do banco
     const [oradoresData, temasData, oradorTemasData] = await Promise.all([
       db.oradores.filter((orador) => orador.ativo).toArray(),
       db.temas.filter((tema) => tema.ativo).toArray(),
       db.oradorTemas.toArray(),
     ]);
+
+    // 2. Atualizar refs e states
     oradoresRef.current = oradoresData;
     temasRef.current = temasData;
     oradorTemasRef.current = oradorTemasData;
 
-    // Encontrar e selecionar o orador recém-criado
+    setTemas(temasData);
+    setOradorTemas(oradorTemasData);
+
+    // 3. 🔥 FORÇA RELOAD COMPLETO - Trigger que faz tudo re-executar
+    setDataReloadTrigger((prev) => prev + 1);
+
+    // 4. Selecionar o novo orador
     const novoOrador = oradoresData.find((o) => o.id === oradorId);
     if (novoOrador) {
       handleSelectOrador(novoOrador);
