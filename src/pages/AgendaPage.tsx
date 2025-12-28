@@ -32,6 +32,7 @@ import {
   Mic,
   Plane,
   Calendar,
+  Download,
 } from "lucide-react";
 import {
   exportDiscursosToCSV,
@@ -254,7 +255,7 @@ function AgendaPage() {
       {/* Espaço para compensar header fixo (aprox. altura do header) */}
       <div className="h-15" />
 
-      <div className="flex justify-center">
+      <div className="flex justify-center mb-2">
         {/* Botão para importar discursos */}
         <label
           htmlFor="import-discursos"
@@ -280,6 +281,15 @@ function AgendaPage() {
             Hoje
           </button>
         )}
+
+        {/* Botão para exportar discursos */}
+        <button
+          onClick={handleExport}
+          className="bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-1 ml-2 text-sm"
+        >
+          <Download size={14} />
+          Exportar Discursos
+        </button>
       </div>
 
       {/* Navegação de período */}
