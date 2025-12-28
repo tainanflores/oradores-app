@@ -267,9 +267,6 @@ function ModalDatasEspeciais({
         <div className="p-4 space-y-4">
           {/* Tipo de data especial */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Tipo de Data Especial
-            </label>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { value: "assembleia", label: "Assembleia" },
@@ -298,9 +295,6 @@ function ModalDatasEspeciais({
 
           {/* Seleção de data */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              Data
-            </label>
             <input
               type="date"
               value={dataSelecionada}
@@ -385,7 +379,7 @@ function ModalDatasEspeciais({
               <label className="block text-sm font-medium text-gray-700">
                 Datas Especiais Definidas
               </label>
-              <div className="max-h-40 overflow-y-auto space-y-2">
+              <div className="max-h-80 overflow-y-auto space-y-2">
                 {datasEspeciais
                   .sort(
                     (a, b) =>

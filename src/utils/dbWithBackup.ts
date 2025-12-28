@@ -43,8 +43,6 @@ export async function dbSaveWithBackup<T>(
       await uploadBackup(JSON.stringify(backupData), fileName);
       // Salva localmente o timestamp do backup para evitar conflito de versão
       localStorage.setItem("oradores_last_sync", String(Date.now()));
-      if (showToast) toast.success("Backup automático enviado com sucesso!");
-      console.log("Backup automático enviado ao Google Drive.");
     } catch (err) {
       if (showToast) toast.error("Falha ao enviar backup automático!");
     }
@@ -88,8 +86,6 @@ export async function dbDeleteWithBackup(
       await uploadBackup(JSON.stringify(backupData), fileName);
       // Salva localmente o timestamp do backup para evitar conflito de versão
       localStorage.setItem("oradores_last_sync", String(Date.now()));
-      if (showToast) toast.success("Backup automático enviado com sucesso!");
-      console.log("Backup automático enviado ao Google Drive.");
     } catch (err) {
       if (showToast) toast.error("Falha ao enviar backup automático!");
     }

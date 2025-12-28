@@ -33,7 +33,13 @@ import {
   Plane,
   Calendar,
 } from "lucide-react";
-
+import {
+  exportDiscursosToCSV,
+  importDiscursosFromCSV,
+} from "../utils/discursosImportExport";
+import { useConfig } from "../contexts/ConfigContext";
+import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
+import toast from "react-hot-toast";
 function AgendaPage() {
   const [discursos, setDiscursos] = useState<Discurso[]>([]);
   const [oradores, setOradores] = useState<Orador[]>([]);
@@ -48,6 +54,9 @@ function AgendaPage() {
     useState<Discurso | null>(null);
   const [periodOffset, setPeriodOffset] = useState(0); // Offset em meses para navegação (0 = atual)
   const [dataReloadTrigger, setDataReloadTrigger] = useState(0);
+  const { congregacao } = useConfig();
+  const autoBackup = congregacao?.autoBackup ?? false;
+  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -114,6 +123,25 @@ function AgendaPage() {
     setPeriodOffset(0);
   };
 
+  const handleExport = () => {
+    exportDiscursosToCSV();
+  };
+
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importDiscursosFromCSV(file, autoBackup, isSignedIn, uploadBackup)
+        .then(() => {
+          toast.success("Discursos importados com sucesso!");
+          // 🔥 Trigger reload da página inteira
+          setDataReloadTrigger((prev) => prev + 1);
+        })
+        .catch((err) => {
+          console.error("Erro ao importar discursos:", err);
+        });
+    }
+  };
+
   // Calcular o período atual para exibição
   const getCurrentPeriodDisplay = () => {
     const startDate = new Date();
@@ -147,12 +175,12 @@ function AgendaPage() {
     const ocupadoPorEspecial = isDiaOcupadoPorDataEspecial(data);
 
     // Não permitir agendamento se já houver discurso ou estiver ocupado por data especial
-    if (discurso || ocupadoPorEspecial) {
+    if (ocupadoPorEspecial) {
       return;
     }
 
     setDataSelecionada(data);
-    setDiscursoSelecionado(null);
+    setDiscursoSelecionado(discurso || null);
     setModalOpen(true);
   };
 
@@ -226,9 +254,24 @@ function AgendaPage() {
       {/* Espaço para compensar header fixo (aprox. altura do header) */}
       <div className="h-15" />
 
-      {/* Botão Hoje - só aparece quando não está no período atual */}
-      {periodOffset !== 0 && (
-        <div className="flex justify-center">
+      <div className="flex justify-center">
+        {/* Botão para importar discursos */}
+        <label
+          htmlFor="import-discursos"
+          className="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-1 mr-2 text-sm cursor-pointer"
+        >
+          <input
+            type="file"
+            id="import-discursos"
+            accept=".csv"
+            onChange={handleImport}
+            className="hidden"
+          />
+          Importar Discursos
+        </label>
+
+        {/* Botão Hoje - só aparece quando não está no período atual */}
+        {periodOffset !== 0 && (
           <button
             onClick={handleCurrentPeriod}
             className="bg-gray-500 text-white px-3 py-1 rounded-lg hover:bg-gray-600 transition-colors flex items-center gap-1 text-sm"
@@ -236,8 +279,8 @@ function AgendaPage() {
             <Home size={14} />
             Hoje
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Navegação de período */}
       <div className="flex justify-center items-center mb-6 space-x-4">
@@ -274,26 +317,19 @@ function AgendaPage() {
               const ano = mesAtual.getFullYear();
               const mes = mesAtual.getMonth();
 
-              // Encontrar todos os dias de reunião do mês
-              const diasDeReuniao: Date[] = [];
+              // Gerar todos os dias do mês
               const primeiroDia = new Date(ano, mes, 1);
               const ultimoDia = new Date(ano, mes + 1, 0);
-
-              const diaReuniaoNumero = configuracao
-                ? getDiaSemanaNumero(configuracao.diaReuniao)
-                : 0;
-
+              const todosDiasDoMes: Date[] = [];
               for (
                 let d = new Date(primeiroDia);
                 d <= ultimoDia;
                 d.setDate(d.getDate() + 1)
               ) {
-                if (d.getDay() === diaReuniaoNumero) {
-                  diasDeReuniao.push(new Date(d));
-                }
+                todosDiasDoMes.push(new Date(d));
               }
 
-              // Adicionar datas de celebração do mês (sem duplicar dias de reunião)
+              // Adicionar datas de celebração do mês (sem duplicar dias do mês)
               const celebracoesDoMes = datasEspeciais
                 .filter(
                   (de) =>
@@ -308,15 +344,15 @@ function AgendaPage() {
                 .map((de) => parseISO(de.data))
                 .filter(
                   (dataEspecial) =>
-                    !diasDeReuniao.some(
+                    !todosDiasDoMes.some(
                       (d) =>
                         d.toISOString().split("T")[0] ===
                         dataEspecial.toISOString().split("T")[0]
                     )
                 );
 
-              // Combinar dias de reunião e celebrações
-              const diasParaExibir = [...diasDeReuniao, ...celebracoesDoMes];
+              // Combinar todos os dias do mês e celebrações
+              const diasParaExibir = [...todosDiasDoMes, ...celebracoesDoMes];
               diasParaExibir.sort((a, b) => a.getTime() - b.getTime());
 
               return (
@@ -457,6 +493,17 @@ function AgendaPage() {
                               )}
                           </div>
                         );
+                      }
+
+                      // Mostrar card vazio apenas se for dia de reunião e não houver discurso
+                      const diaReuniaoNumero = configuracao
+                        ? getDiaSemanaNumero(configuracao.diaReuniao)
+                        : 0;
+                      const isDiaReuniao = dia.getDay() === diaReuniaoNumero;
+
+                      if (!discurso && !isDiaReuniao) {
+                        // Não mostrar nada para dias que não são de reunião e não têm discurso
+                        return null;
                       }
 
                       // Renderização padrão para discursos agendados e dias livres

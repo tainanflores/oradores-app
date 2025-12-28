@@ -110,6 +110,23 @@ function ModalAgendamento({
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (isOpen && discursoExistente && oradoresRef.current.length > 0) {
+      const orador =
+        oradoresRef.current.find((o) => o.id === discursoExistente.oradorId) ||
+        null;
+      setSelectedOrador(orador);
+      setBuscaOrador(orador ? orador.nome : "");
+      setSelectedTema(discursoExistente.temaId);
+      setIsEditing(false);
+    } else if (isOpen && !discursoExistente) {
+      setSelectedOrador(null);
+      setBuscaOrador("");
+      setSelectedTema("");
+      setIsEditing(true);
+    }
+  }, [isOpen, discursoExistente, temas, oradorTemas]);
+
   // Buscar último e próximo discursos sempre que o orador for selecionado
   useEffect(() => {
     if (selectedOrador && selectedOrador.id) {
