@@ -23,6 +23,7 @@ import {
   User,
   Loader2,
 } from "lucide-react";
+import { sendWhatsappEvolution } from "../utils/sendWhatsappEvolution";
 
 interface ModalAgendamentoProps {
   isOpen: boolean;
@@ -127,6 +128,27 @@ function ModalAgendamento({
     }
   }, [isOpen, discursoExistente, temas, oradorTemas]);
 
+  // Handler para mostrar ou não o bloco de último/próximo discurso
+  const shouldShowDiscursoInfo = (tipo: "ultimo" | "proximo") => {
+    if (!isEditing) return false;
+    const dataAtual = discursoExistente?.data;
+    if (
+      tipo === "ultimo" &&
+      ultimoDiscurso &&
+      dataAtual &&
+      ultimoDiscurso.data === dataAtual
+    )
+      return false;
+    if (
+      tipo === "proximo" &&
+      proximoDiscurso &&
+      dataAtual &&
+      proximoDiscurso.data === dataAtual
+    )
+      return false;
+    return true;
+  };
+
   // Buscar último e próximo discursos sempre que o orador for selecionado
   useEffect(() => {
     if (selectedOrador && selectedOrador.id) {
@@ -185,6 +207,51 @@ function ModalAgendamento({
     }
   }, [selectedOrador]);
 
+  // Handler para WhatsApp
+  const handleWhatsapp = async () => {
+    if (!selectedOrador || !selectedOrador.telefone) {
+      toast.error(
+        "Cadastre o número de telefone do orador para usar o WhatsApp."
+      );
+      return;
+    }
+    if (
+      !window.confirm("Deseja enviar a mensagem de confirmação para o orador?")
+    ) {
+      return;
+    }
+    const numero = selectedOrador.telefone.replace(/\D/g, "");
+    const temaObj = temas.find((t) => t.id === Number(selectedTema)) || null;
+    const horario = congregacao?.horarioReuniao || "";
+    const dataFormatada = dataSelecionada?.toLocaleDateString("pt-BR", {
+      weekday: "long",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+    const mensagem = `✅ *Confirmação de Discurso*\n\nOlá ${
+      selectedOrador.nome
+    }!\n\nSeu discurso está agendado para:\n📅 *${dataFormatada}*\n🕒 *Horário:* ${horario}\n\n*Tema:* ${
+      temaObj ? temaObj.numero + ". " + temaObj.titulo : "(tema não definido)"
+    }\n\nPor favor, confirme seu comparecimento. Qualquer dúvida, estamos à disposição!\n\nAbraço!`;
+    // ATENÇÃO: Não é seguro expor tokens no frontend. Use backend para produção!
+
+    toast.loading("Enviando mensagem...");
+    const result = await sendWhatsappEvolution({
+      numero,
+      texto: mensagem,
+    });
+    toast.dismiss();
+    if (result.success && result.response?.status) {
+      toast.success("Mensagem enviada com sucesso!");
+    } else {
+      toast.error(
+        "Erro ao enviar mensagem: " +
+          (result.response?.message || result.error || "")
+      );
+    }
+  };
+
   const handleToggleEdit = () => {
     setIsEditing(!isEditing);
   };
@@ -227,6 +294,7 @@ function ModalAgendamento({
         oradorId: selectedOrador.id,
         temaId: Number(selectedTema),
         tipo: selectedOrador.tipo,
+        lembrete: false,
       };
 
       if (discursoExistente && discursoExistente.id) {
@@ -417,6 +485,25 @@ function ModalAgendamento({
               </p>
             </div>
           </div>
+          {/* Botão WhatsApp: só aparece se não está editando, há discursoExistente e orador com telefone */}
+          {!isEditing && discursoExistente && selectedOrador && (
+            <button
+              onClick={handleWhatsapp}
+              className="p-2 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors flex-shrink-0 ml-2"
+              title="Enviar mensagem pelo WhatsApp"
+              aria-label="WhatsApp do orador"
+            >
+              {/* Ícone WhatsApp SVG */}
+              <svg
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                className="w-5 h-5"
+                aria-hidden="true"
+              >
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.472-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.151-.174.2-.298.3-.497.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.5-.669-.51-.173-.007-.372-.009-.571-.009-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.099 3.2 5.077 4.363.71.306 1.263.489 1.694.626.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.413-.074-.124-.272-.198-.57-.347zm-5.421 6.403h-.001a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.999-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.455 4.436-9.89 9.893-9.89 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.896 6.994c-.003 5.456-4.438 9.891-9.893 9.891zm8.413-18.306A11.815 11.815 0 0012.05 0C5.495 0 .16 5.336.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.304-1.654a11.876 11.876 0 005.683 1.448h.005c6.554 0 11.89-5.336 11.893-11.892a11.82 11.82 0 00-3.473-8.429z" />
+              </svg>
+            </button>
+          )}
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0 ml-2"
@@ -432,14 +519,10 @@ function ModalAgendamento({
           <div className="p-4 space-y-4">
             {/* Seção Orador */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-600" />
-                <label className="text-sm font-semibold text-gray-700">
-                  Orador
-                </label>
-              </div>
-
               <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-gray-600" />
+                </div>
                 <div className="flex-1 relative">
                   <input
                     type="text"
@@ -499,59 +582,64 @@ function ModalAgendamento({
                   <UserPlus className="w-4 h-4" />
                 </button>
               </div>
-              {selectedOrador && ultimoDiscurso && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-blue-900 mb-1">
-                        Último Discurso
-                      </h4>
-                      <div className="flex items-center gap-3 text-xs text-blue-800">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {formatDateBR(ultimoDiscurso.data)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <BookOpen className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {ultimoDiscurso.tema}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
 
-              {selectedOrador && proximoDiscurso && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-green-600 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium text-green-900 mb-1">
-                        Próximo Discurso
-                      </h4>
-                      <div className="flex items-center gap-3 text-xs text-green-800">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {formatDateBR(proximoDiscurso.data)}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <BookOpen className="w-3 h-3 flex-shrink-0" />
-                          <span className="truncate">
-                            {proximoDiscurso.tema}
-                          </span>
+              {selectedOrador &&
+                ultimoDiscurso &&
+                shouldShowDiscursoInfo("ultimo") && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-blue-900 mb-1">
+                          Último Discurso
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-blue-800">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">
+                              {formatDateBR(ultimoDiscurso.data)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <BookOpen className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">
+                              {ultimoDiscurso.tema}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+
+              {selectedOrador &&
+                proximoDiscurso &&
+                shouldShowDiscursoInfo("proximo") && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-medium text-green-900 mb-1">
+                          Próximo Discurso
+                        </h4>
+                        <div className="flex items-center gap-3 text-xs text-green-800">
+                          <div className="flex items-center gap-1">
+                            <Calendar className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">
+                              {formatDateBR(proximoDiscurso.data)}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <BookOpen className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">
+                              {proximoDiscurso.tema}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
             </div>
 
             {/* Seção Tema */}

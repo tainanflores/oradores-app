@@ -4,7 +4,16 @@ import ModalBloquearTemas from "../components/ModalBloquearTemas";
 import ModalEditarTema from "../components/ModalEditarTema";
 import ModalHistoricoTema from "../components/ModalHistoricoTema";
 import { formatDateBR } from "../utils/dateUtils";
-import { BookOpen, Search, Ban, Plus, Loader2, FileText } from "lucide-react";
+import {
+  BookOpen,
+  Search,
+  Ban,
+  Plus,
+  Loader2,
+  FileText,
+  History,
+} from "lucide-react";
+import TemasPorAnoModal from "../components/ModalTemasPorAno";
 
 function TemasPage() {
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -16,6 +25,8 @@ function TemasPage() {
   const [showBloquearModal, setShowBloquearModal] = useState(false);
   const [showEditarModal, setShowEditarModal] = useState(false);
   const [showHistoricoModal, setShowHistoricoModal] = useState(false);
+  const [showTemasPorAnoModal, setShowTemasPorAnoModal] = useState(false);
+  const [discursos, setDiscursos] = useState<any[]>([]);
   const [temaSelecionado, setTemaSelecionado] = useState<Tema | null>(null);
   const [buscaTema, setBuscaTema] = useState("");
 
@@ -43,6 +54,7 @@ function TemasPage() {
 
         setTemas(temasData);
         setTemasBloqueados(bloqueadosData);
+        setDiscursos(discursosData);
 
         // Calcular últimas datas para cada tema
         const ultimasDatasMap = new Map<number, string>();
@@ -139,6 +151,14 @@ function TemasPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-800">Esboços</h1>
           </div>
+          <button
+            type="button"
+            className="p-2 rounded-lg bg-purple-100 hover:bg-purple-200 transition-colors ml-2"
+            title="Histórico de temas por ano"
+            onClick={() => setShowTemasPorAnoModal(true)}
+          >
+            <History className="w-6 h-6 text-purple-600" />
+          </button>
         </div>
       </div>
 
@@ -304,6 +324,49 @@ function TemasPage() {
           onSave={handleReloadTemas}
         />
       )}
+
+      {showTemasPorAnoModal &&
+        (() => {
+          const anosSet = new Set<number>();
+          const datasPorAno: {
+            [temaId: number]: { [ano: number]: string };
+          } = {};
+          // Construir o conjunto de anos e o mapeamento de datas por ano somente dos ultimos 3 anos
+
+          temas.forEach((tema) => {
+            datasPorAno[tema.id!] = {};
+          });
+          discursos.forEach((discurso) => {
+            const data = new Date(discurso.data);
+            let ano = data.getFullYear();
+            anosSet.add(ano);
+            if (datasPorAno[discurso.temaId]) {
+              // Armazenar a data no formato DD/MM/AAAA
+              const dataFormatada = `${String(data.getDate()).padStart(
+                2,
+                "0"
+              )}/${String(data.getMonth() + 1).padStart(
+                2,
+                "0"
+              )}/${data.getFullYear()}`;
+              datasPorAno[discurso.temaId][ano] = dataFormatada;
+            }
+          });
+          return (
+            <TemasPorAnoModal
+              isOpen={showTemasPorAnoModal}
+              onClose={() => setShowTemasPorAnoModal(false)}
+              temas={temas.map((t) => ({ id: t.id!, numero: t.numero }))}
+              anos={
+                //pega somente os ultimos 3 anos
+                Array.from(anosSet)
+                  .sort((a, b) => a - b)
+                  .slice(-3)
+              }
+              datasPorAno={datasPorAno}
+            />
+          );
+        })()}
     </div>
   );
 }

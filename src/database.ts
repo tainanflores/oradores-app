@@ -31,6 +31,7 @@ export interface Discurso {
   oradorId: number;
   temaId: number;
   tipo: "local" | "visitante";
+  lembrete?: boolean; // true = lembrete já enviado, false = pendente (default: false)
 }
 
 export interface SaidaOrador {
