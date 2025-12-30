@@ -229,11 +229,23 @@ function ModalAgendamento({
       month: "2-digit",
       year: "numeric",
     });
-    const mensagem = `✅ *Confirmação de Discurso*\n\nOlá ${
-      selectedOrador.nome
-    }!\n\nSeu discurso está agendado para:\n📅 *${dataFormatada}*\n🕒 *Horário:* ${horario}\n\n*Tema:* ${
-      temaObj ? temaObj.numero + ". " + temaObj.titulo : "(tema não definido)"
-    }\n\nPor favor, confirme seu comparecimento. Qualquer dúvida, estamos à disposição!\n\nAbraço!`;
+    const nomeCongregacao = congregacao?.nomeCongregacao || "";
+    const cidadeCongregacao = congregacao?.cidade || "";
+    const mensagem =
+      `✅ *Confirmação de Discurso*\n\nOlá ${selectedOrador.nome}!\n\n` +
+      `Seu discurso está agendado para:\n` +
+      `📅 *${dataFormatada}*\n` +
+      `🕒 *Horário:* ${horario}\n` +
+      `*Tema:* ${
+        temaObj ? temaObj.numero + ". " + temaObj.titulo : "(tema não definido)"
+      }\n` +
+      `\nLocal: *${nomeCongregacao} - ${cidadeCongregacao}*\n` +
+      `\nPor favor, confirme seu comparecimento e as informações abaixo:\n` +
+      `\n• Cântico?` +
+      `\n• Usará imagens?` +
+      `\n• Vai precisar de hospedagem?` +
+      `\n• Precisa de ajuda de custo com combustível?` +
+      `\n\nQualquer dúvida, estamos à disposição!\n\nAbraço!`;
     // ATENÇÃO: Não é seguro expor tokens no frontend. Use backend para produção!
 
     toast.loading("Enviando mensagem...");

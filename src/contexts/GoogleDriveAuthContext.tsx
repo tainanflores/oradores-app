@@ -117,7 +117,15 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
      BACKUP
      ===================================================== */
   const uploadBackup = async (json: string, fileName?: string) => {
-    return uploadBackupToDrive(json, fileName);
+    try {
+      setLoading(true);
+      return uploadBackupToDrive(json, fileName);
+    } catch (err) {
+      console.error("Erro ao enviar backup para o Drive:", err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* =====================================================

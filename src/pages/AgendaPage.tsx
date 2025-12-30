@@ -140,14 +140,33 @@ function AgendaPage() {
       return;
     }
     const numero = orador.telefone.replace(/\D/g, "");
-    const tema = temas.find((t) => t.id === discurso.temaId);
+    const temaObj = temas.find((t) => t.id === discurso.temaId) || null;
     const horario = configuracao?.horarioReuniao || "";
-    const dataFormatada = discurso.data.split("-").reverse().join("/");
-    const mensagem = `✅ *Lembrete de Discurso*\n\nOlá ${
-      orador.nome
-    }!\n\nLembrete: seu discurso está agendado para:\n📅 *${dataFormatada}*\n🕒 *Horário:* ${horario}\n\n*Tema:* ${
-      tema ? tema.numero + ". " + tema.titulo : "(tema não definido)"
-    }\n\nPor favor, confirme seu comparecimento. Qualquer dúvida, estamos à disposição!\n\nAbraço!`;
+    const dataFormatada = discurso.data
+      ? new Date(discurso.data).toLocaleDateString("pt-BR", {
+          weekday: "long",
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+        })
+      : "";
+    const nomeCongregacao = configuracao?.nomeCongregacao || "";
+    const cidadeCongregacao = configuracao?.cidade || "";
+    const mensagem =
+      `✅ *Confirmação de Discurso*\n\nOlá ${orador.nome}!\n\n` +
+      `Seu discurso está agendado para:\n` +
+      `📅 *${dataFormatada}*\n` +
+      `🕒 *Horário:* ${horario}\n` +
+      `*Tema:* ${
+        temaObj ? temaObj.numero + ". " + temaObj.titulo : "(tema não definido)"
+      }\n` +
+      `\nLocal: *${nomeCongregacao} - ${cidadeCongregacao}*\n` +
+      `\nPor favor, confirme seu comparecimento e as informações abaixo:\n` +
+      `\n• Cântico?` +
+      `\n• Usará imagens?` +
+      `\n• Vai precisar de hospedagem?` +
+      `\n• Precisa de ajuda de custo com combustível?` +
+      `\n\nQualquer dúvida, estamos à disposição!\n\nAbraço!`;
     toast.loading("Enviando lembrete...");
     const result = await sendWhatsappEvolution({ numero, texto: mensagem });
     toast.dismiss();

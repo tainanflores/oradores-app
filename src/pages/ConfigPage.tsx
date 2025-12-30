@@ -157,8 +157,12 @@ function ConfigPage() {
     }
   };
 
-  // Backup manual no Drive
+  // Backup manual no Drive usando o contexto de autenticação do Google Drive
   const handleBackupToDrive = async () => {
+    if (!isSignedIn) {
+      toast.error("Conecte-se ao Google Drive para fazer backup.");
+      return;
+    }
     try {
       const backupData = await import("../utils/backup").then((m) =>
         m.exportarDados()
