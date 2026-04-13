@@ -13,6 +13,7 @@ import {
   isWithinInterval,
   startOfWeek,
   endOfWeek,
+  formatDate,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ModalAgendamento from "../components/ModalAgendamento";
@@ -46,6 +47,7 @@ import {
   marcarLembreteEnviado,
 } from "../utils/discursosLembrete";
 import { sendWhatsappEvolution } from "../utils/sendWhatsappEvolution";
+import { formatDateBR } from "../utils/dateUtils";
 
 function AgendaPage() {
   const [discursos, setDiscursos] = useState<Discurso[]>([]);
@@ -142,14 +144,7 @@ function AgendaPage() {
     const numero = orador.telefone.replace(/\D/g, "");
     const temaObj = temas.find((t) => t.id === discurso.temaId) || null;
     const horario = configuracao?.horarioReuniao || "";
-    const dataFormatada = discurso.data
-      ? new Date(discurso.data).toLocaleDateString("pt-BR", {
-          weekday: "long",
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-        })
-      : "";
+    const dataFormatada = formatDateBR(discurso.data);
     const nomeCongregacao = configuracao?.nomeCongregacao || "";
     const cidadeCongregacao = configuracao?.cidade || "";
     const mensagem =
@@ -183,7 +178,7 @@ function AgendaPage() {
     } else {
       toast.error(
         "Erro ao enviar lembrete: " +
-          (result.response?.message || result.error || "")
+          (result.response?.message || result.error || ""),
       );
     }
   };
@@ -232,7 +227,7 @@ function AgendaPage() {
     return `${format(startDate, "MMM", { locale: ptBR })} - ${format(
       endDate,
       "MMM",
-      { locale: ptBR }
+      { locale: ptBR },
     )}`;
   };
 
@@ -510,7 +505,7 @@ function AgendaPage() {
                         return (
                           data.getFullYear() === ano && data.getMonth() === mes
                         );
-                      })()
+                      })(),
                   )
                   .map((de) => parseISO(de.data))
                   .filter(
@@ -518,8 +513,8 @@ function AgendaPage() {
                       !todosDiasDoMes.some(
                         (d) =>
                           d.toISOString().split("T")[0] ===
-                          dataEspecial.toISOString().split("T")[0]
-                      )
+                          dataEspecial.toISOString().split("T")[0],
+                      ),
                   );
 
                 // Combinar todos os dias do mês e celebrações
@@ -536,7 +531,7 @@ function AgendaPage() {
                       {diasParaExibir.map((dia) => {
                         const chave = dia.toISOString().split("T")[0];
                         const discurso = discursos.find(
-                          (d) => d.data === chave
+                          (d) => d.data === chave,
                         );
                         const hoje = new Date();
                         const hojeStr = format(hoje, "yyyy-MM-dd");
@@ -550,10 +545,10 @@ function AgendaPage() {
                         let temaInfo = null;
                         if (discurso) {
                           const orador = oradores.find(
-                            (o) => o.id === discurso.oradorId
+                            (o) => o.id === discurso.oradorId,
                           );
                           const tema = temas.find(
-                            (t) => t.id === discurso.temaId
+                            (t) => t.id === discurso.temaId,
                           );
                           if (orador && tema) {
                             oradorInfo = orador;
@@ -563,7 +558,7 @@ function AgendaPage() {
 
                         // Verificar se há qualquer data especial neste dia
                         const dataEspecial = datasEspeciais.find(
-                          (de) => de.data === chave
+                          (de) => de.data === chave,
                         );
 
                         // Verificar se o dia está ocupado por data especial da semana
@@ -581,11 +576,11 @@ function AgendaPage() {
                             dataEspecial.tipo === "discurso_especial"
                           ) {
                             const discursoEspecial = discursos.find(
-                              (d) => d.data === chave && d.temaId === 1
+                              (d) => d.data === chave && d.temaId === 1,
                             );
                             if (discursoEspecial) {
                               oradorEspecial = oradores.find(
-                                (o) => o.id === discursoEspecial.oradorId
+                                (o) => o.id === discursoEspecial.oradorId,
                               );
                               temaEspecial = temas.find((t) => t.id === 1);
                             }
@@ -636,10 +631,10 @@ function AgendaPage() {
                                 {dataEspecial.tipo === "celebracao"
                                   ? "CELEBRAÇÃO"
                                   : dataEspecial.tipo === "discurso_especial"
-                                  ? "DISCURSO ESPECIAL"
-                                  : dataEspecial.tipo
-                                      .replace("_", " ")
-                                      .toUpperCase()}
+                                    ? "DISCURSO ESPECIAL"
+                                    : dataEspecial.tipo
+                                        .replace("_", " ")
+                                        .toUpperCase()}
                               </div>
 
                               {/* Mostrar orador para celebração e discurso especial */}
@@ -698,10 +693,10 @@ function AgendaPage() {
                                   ? "bg-green-100 text-green-800 hover:bg-green-200 cursor-pointer"
                                   : "bg-orange-100 text-orange-800 hover:bg-orange-200 cursor-pointer"
                                 : ocupadoPorEspecial
-                                ? "bg-red-100 text-red-800 cursor-not-allowed"
-                                : isPast
-                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                                : "bg-blue-50 text-blue-800 hover:bg-blue-100 cursor-pointer"
+                                  ? "bg-red-100 text-red-800 cursor-not-allowed"
+                                  : isPast
+                                    ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                    : "bg-blue-50 text-blue-800 hover:bg-blue-100 cursor-pointer"
                             } ${isToday ? "ring-2 ring-purple-300" : ""} ${
                               isLembretePendente
                                 ? "animate-shine border-2 border-yellow-400"

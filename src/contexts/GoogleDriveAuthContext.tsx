@@ -52,21 +52,41 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
     const wasAuthorized =
       localStorage.getItem("googleDriveAuthorized") === "true";
 
-    if (explicitlyLoggedOut) return;
-    if (!wasAuthorized) return;
-    if (hasTriedSilentSignIn) return;
+    console.log("[GoogleDriveContext] useEffect iniciado:", {
+      wasAuthorized,
+      explicitlyLoggedOut,
+      hasTriedSilentSignIn,
+    });
 
+    if (explicitlyLoggedOut) {
+      console.log("[GoogleDriveContext] Usuário fez logout explicitamente");
+      return;
+    }
+    if (!wasAuthorized) {
+      console.log("[GoogleDriveContext] Ainda não autorizado");
+      return;
+    }
+    if (hasTriedSilentSignIn) {
+      console.log("[GoogleDriveContext] Já tentou silent sign-in");
+      return;
+    }
+
+    console.log("[GoogleDriveContext] Tentando silent sign-in...");
     setHasTriedSilentSignIn(true);
 
     silentSignInService().then((success) => {
+      console.log("[GoogleDriveContext] Silent sign-in resultado:", success);
       setIsSignedIn(success);
 
-      if (!success) {
+      if (success) {
+        // Manter a flag de autorização se o login silencioso funcionou
+        localStorage.setItem("googleDriveAuthorized", "true");
+      } else {
         localStorage.removeItem("googleDriveAuthorized");
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasTriedSilentSignIn]);
+  }, []);
 
   /* =====================================================
      LOGIN MANUAL
@@ -87,7 +107,7 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error(err);
       toast.error(
-        "Falha ao conectar com o Google Drive. Permita pop-ups e tente novamente."
+        "Falha ao conectar com o Google Drive. Permita pop-ups e tente novamente.",
       );
     } finally {
       setLoading(false);
@@ -143,7 +163,7 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
       if (remoteDate <= localDate) return;
 
       const confirmRestore = window.confirm(
-        "Há um backup mais recente no Google Drive. Deseja restaurar e sincronizar este dispositivo? Isso pode sobrescrever dados locais."
+        "Há um backup mais recente no Google Drive. Deseja restaurar e sincronizar este dispositivo? Isso pode sobrescrever dados locais.",
       );
 
       if (!confirmRestore) return;
@@ -183,7 +203,7 @@ export function useGoogleDriveAuth() {
   const ctx = useContext(GoogleDriveAuthContext);
   if (!ctx) {
     throw new Error(
-      "useGoogleDriveAuth deve ser usado dentro do GoogleDriveAuthProvider"
+      "useGoogleDriveAuth deve ser usado dentro do GoogleDriveAuthProvider",
     );
   }
   return ctx;

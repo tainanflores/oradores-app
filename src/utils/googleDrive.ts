@@ -78,6 +78,24 @@ function clearSession() {
   gapi.client.setToken(null);
 }
 
+function markAuthenticationTime() {
+  const timestamp = Date.now();
+  localStorage.setItem("google_auth_time", String(timestamp));
+  console.log("[GoogleDrive] Autenticação marcada:", new Date(timestamp));
+}
+
+function hasBeenAuthenticatedBefore(): boolean {
+  const authTime = localStorage.getItem("google_auth_time");
+  const hasAuth = !!authTime;
+  console.log("[GoogleDrive] Autenticado antes?", hasAuth);
+  return hasAuth;
+}
+
+function clearAuthenticationTime() {
+  localStorage.removeItem("google_auth_time");
+  console.log("[GoogleDrive] Marca de autenticação removida");
+}
+
 /* =====================================================
    SILENT SIGN-IN
    ===================================================== */
@@ -85,19 +103,36 @@ export async function silentSignIn(): Promise<boolean> {
   await loadGoogleAPI();
   if (!tokenClient) return false;
 
+  // Só tenta login silencioso se foi autenticado antes
+  if (!hasBeenAuthenticatedBefore()) {
+    console.log(
+      "[GoogleDrive] Nunca autenticado antes - não tentando silent sign-in",
+    );
+    return false;
+  }
+
   return new Promise((resolve) => {
     tokenClient!.callback = (resp: any) => {
       if (resp?.access_token) {
+        console.log("[GoogleDrive] Silent sign-in bem-sucedido");
         setSession(resp.access_token);
+        markAuthenticationTime();
         resolve(true);
       } else {
+        console.log("[GoogleDrive] Silent sign-in falhou");
         resolve(false);
       }
     };
 
     try {
-      tokenClient!.requestAccessToken({ prompt: "" });
-    } catch {
+      console.log("[GoogleDrive] Tentando silent sign-in (select_account)...");
+      // 'select_account' permite o user escolher conta sem pedir consentimento novamente
+      // Respeita cookies de sessão do navegador
+      tokenClient!.requestAccessToken({
+        prompt: "select_account",
+      });
+    } catch (err) {
+      console.error("[GoogleDrive] Erro ao tentar silent sign-in:", err);
       resolve(false);
     }
   });
@@ -114,15 +149,18 @@ export async function signInGoogleDrive(): Promise<void> {
     const timeout = setTimeout(() => {
       reject(
         new Error(
-          "Login do Google não concluído. Verifique bloqueio de pop-ups."
-        )
+          "Login do Google não concluído. Verifique bloqueio de pop-ups.",
+        ),
       );
     }, 30000);
 
     tokenClient!.callback = (resp: any) => {
       clearTimeout(timeout);
       if (resp?.access_token) {
+        console.log("[GoogleDrive] Manual sign-in sucesso");
         setSession(resp.access_token);
+        // Marcar que foi autenticado com sucesso
+        markAuthenticationTime();
         resolve();
       } else {
         reject(resp);
@@ -149,6 +187,7 @@ export function signOutGoogleDrive(): void {
   // @ts-ignore
   google.accounts.oauth2.revoke(accessToken);
   clearSession();
+  clearAuthenticationTime();
 }
 
 /* =====================================================
@@ -156,7 +195,7 @@ export function signOutGoogleDrive(): void {
    ===================================================== */
 export async function uploadBackupToDrive(
   json: string,
-  fileName = "backup-oradores.json"
+  fileName = "backup-oradores.json",
 ): Promise<string> {
   if (!isGoogleDriveSignedIn()) {
     throw new Error("Google Drive não conectado");
