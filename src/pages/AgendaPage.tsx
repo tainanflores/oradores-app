@@ -13,7 +13,6 @@ import {
   isWithinInterval,
   startOfWeek,
   endOfWeek,
-  formatDate,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import ModalAgendamento from "../components/ModalAgendamento";
