@@ -15,6 +15,11 @@ let tokenClient: google.accounts.oauth2.TokenClient | null = null;
 let accessToken: string | null = null;
 let initPromise: Promise<void> | null = null;
 
+// Chaves para armazenar token no localStorage
+const TOKEN_STORAGE_KEY = "google_drive_access_token";
+const TOKEN_EXPIRY_KEY = "google_drive_token_expiry";
+const TOKEN_TIMESTAMP_KEY = "google_drive_token_timestamp";
+
 /* =====================================================
    LOAD GOOGLE APIS (singleton)
    ===================================================== */
@@ -66,14 +71,68 @@ export function loadGoogleAPI(): Promise<void> {
 /* =====================================================
    AUTH HELPERS
    ===================================================== */
-function setSession(token: string) {
+
+/**
+ * Salva token no localStorage com informação de expiração
+ */
+function setSession(token: string, expiresIn = 3599) {
+  const expiryTime = Date.now() + expiresIn * 1000;
+
   accessToken = token;
+  localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  localStorage.setItem(TOKEN_EXPIRY_KEY, String(expiryTime));
+  localStorage.setItem(TOKEN_TIMESTAMP_KEY, String(Date.now()));
+
   // @ts-ignore
   gapi.client.setToken({ access_token: token });
+
+  console.log(
+    `[GoogleDrive] Token salvo. Expira em: ${new Date(expiryTime).toLocaleTimeString("pt-BR")}`,
+  );
+}
+
+/**
+ * Carrega token do localStorage se válido
+ */
+function loadSavedToken(): string | null {
+  const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+  const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+
+  if (!savedToken || !expiry) {
+    return null;
+  }
+
+  const expiryTime = Number(expiry);
+  const now = Date.now();
+
+  // Se expirou, remove e retorna null
+  if (now >= expiryTime) {
+    console.log("[GoogleDrive] Token expirado. Removendo...");
+    clearSavedToken();
+    return null;
+  }
+
+  // Token válido
+  const minutesRemaining = Math.round((expiryTime - now) / 1000 / 60);
+  console.log(
+    `[GoogleDrive] Token carregado do localStorage (válido por ${minutesRemaining}min)`,
+  );
+
+  return savedToken;
+}
+
+/**
+ * Limpa token do localStorage
+ */
+function clearSavedToken() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(TOKEN_EXPIRY_KEY);
+  localStorage.removeItem(TOKEN_TIMESTAMP_KEY);
 }
 
 function clearSession() {
   accessToken = null;
+  clearSavedToken();
   // @ts-ignore
   gapi.client.setToken(null);
 }
@@ -103,7 +162,15 @@ export async function silentSignIn(): Promise<boolean> {
   await loadGoogleAPI();
   if (!tokenClient) return false;
 
-  // Só tenta login silencioso se foi autenticado antes
+  // 1º: Tenta carregar token já salvo
+  const savedToken = loadSavedToken();
+  if (savedToken) {
+    console.log("[GoogleDrive] Usando token salvo - login persistente");
+    setSession(savedToken);
+    return true;
+  }
+
+  // 2º: Só tenta novo login silencioso se foi autenticado antes
   if (!hasBeenAuthenticatedBefore()) {
     console.log(
       "[GoogleDrive] Nunca autenticado antes - não tentando silent sign-in",
@@ -115,7 +182,7 @@ export async function silentSignIn(): Promise<boolean> {
     tokenClient!.callback = (resp: any) => {
       if (resp?.access_token) {
         console.log("[GoogleDrive] Silent sign-in bem-sucedido");
-        setSession(resp.access_token);
+        setSession(resp.access_token, resp.expires_in || 3599);
         markAuthenticationTime();
         resolve(true);
       } else {
@@ -158,7 +225,7 @@ export async function signInGoogleDrive(): Promise<void> {
       clearTimeout(timeout);
       if (resp?.access_token) {
         console.log("[GoogleDrive] Manual sign-in sucesso");
-        setSession(resp.access_token);
+        setSession(resp.access_token, resp.expires_in || 3599);
         // Marcar que foi autenticado com sucesso
         markAuthenticationTime();
         resolve();
@@ -188,6 +255,8 @@ export function signOutGoogleDrive(): void {
   google.accounts.oauth2.revoke(accessToken);
   clearSession();
   clearAuthenticationTime();
+  clearSavedToken();
+  console.log("[GoogleDrive] Logout completo - token removido");
 }
 
 /* =====================================================

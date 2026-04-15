@@ -51,7 +51,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
             email: "",
             cidade: "",
             autoBackup: false,
-          }
+          },
         );
       } else {
         setShowConfigModal(false);
@@ -72,7 +72,7 @@ export function ConfigProvider({ children }: { children: ReactNode }) {
       c,
       c.autoBackup,
       isSignedIn,
-      uploadBackup
+      uploadBackup,
     );
     setCongregacao(c);
     setShowConfigModal(false);

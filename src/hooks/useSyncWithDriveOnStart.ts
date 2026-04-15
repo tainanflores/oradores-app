@@ -31,7 +31,7 @@ export function useSyncWithDriveOnStart() {
         if (remoteDate > localDate) {
           if (
             window.confirm(
-              "Há um backup mais recente no Google Drive. Deseja restaurar e sincronizar este dispositivo?"
+              "Há um backup mais recente no Google Drive. Deseja restaurar e sincronizar este dispositivo?",
             )
           ) {
             const backupData = await downloadBackupFromDrive(latest.id);
