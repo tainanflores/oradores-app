@@ -227,7 +227,7 @@ async function seedDatabase() {
       await db.temas.bulkPut(temasParaAdicionar);
 
       console.log(
-        `${temasParaAdicionar.length} temas adicionados com sucesso!`
+        `${temasParaAdicionar.length} temas adicionados com sucesso!`,
       );
     } else {
       console.log(`${temasCount} temas já existem no banco.`);
@@ -241,15 +241,31 @@ async function seedDatabase() {
 await db.open();
 await seedDatabase();
 
-// Expõe db globalmente para testes no console
-(window as unknown as { db: typeof db }).db = db;
+// Função para envolver os providers com a capacidade de ler autoBackup
+async function renderApp() {
+  // Buscar configuração do banco para obter autoBackup
+  const configuracao = await db.configuracoes.get(1);
+  const autoBackupEnabled = configuracao?.autoBackup === true;
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <GoogleDriveAuthProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </GoogleDriveAuthProvider>
-  </StrictMode>
-);
+  // Expõe db globalmente para testes no console
+  (window as unknown as { db: typeof db }).db = db;
+
+  const root = createRoot(document.getElementById("root")!);
+
+  // Componente wrapper para passar autoBackup ao GoogleDriveAuthProvider
+  function AppWithProviders() {
+    return (
+      <StrictMode>
+        <GoogleDriveAuthProvider autoBackupEnabled={autoBackupEnabled}>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </GoogleDriveAuthProvider>
+      </StrictMode>
+    );
+  }
+
+  root.render(<AppWithProviders />);
+}
+
+renderApp();

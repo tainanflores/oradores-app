@@ -1,4 +1,9 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useLocation,
+} from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 import { useSyncWithDriveOnStart } from "./hooks/useSyncWithDriveOnStart";
 import { useGoogleDriveAuth } from "./contexts/GoogleDriveAuthContext";
@@ -9,6 +14,7 @@ import AgendaPage from "./pages/AgendaPage";
 import SaidasPage from "./pages/SaidasPage";
 import DatasEspeciaisPage from "./pages/DatasEspeciaisPage";
 import ConfigPage from "./pages/ConfigPage";
+import QRCodePage from "./pages/QRCodePage";
 import BottomNavigation from "./components/navigation/BottomNavigation";
 import GoogleDriveStatusBar from "./components/GoogleDriveStatusBar";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
@@ -33,9 +39,66 @@ function AppContent() {
   }
 
   return (
+    <Router>
+      <AppRouterContent
+        showConfigModal={showConfigModal}
+        congregacao={congregacao}
+        saveCongregacao={saveCongregacao}
+        setCongregacao={setCongregacao}
+      />
+      <GoogleDriveStatusBar autoBackup={!!congregacao?.autoBackup} />
+      <PWAInstallPrompt />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: "#363636",
+            color: "#fff",
+          },
+          success: {
+            duration: 3000,
+            iconTheme: {
+              primary: "#10B981",
+              secondary: "#fff",
+            },
+          },
+          error: {
+            duration: 4000,
+            iconTheme: {
+              primary: "#EF4444",
+              secondary: "#fff",
+            },
+          },
+        }}
+      />
+    </Router>
+  );
+}
+
+interface AppRouterContentProps {
+  showConfigModal: boolean;
+  congregacao: any;
+  saveCongregacao: (congregacao: any) => void;
+  setCongregacao: (congregacao: any) => void;
+}
+
+function AppRouterContent({
+  showConfigModal,
+  congregacao,
+  saveCongregacao,
+  setCongregacao,
+}: AppRouterContentProps) {
+  const location = useLocation();
+
+  // Não mostrar o modal na página de QR code
+  const shouldShowConfigModal =
+    showConfigModal && !location.pathname.includes("/qrcode");
+
+  return (
     <>
       {/* Modal global de configuração obrigatória */}
-      {showConfigModal && (
+      {shouldShowConfigModal && (
         <div className="fixed inset-0 bg-gradient-to-br from-purple-900 to-indigo-900 bg-opacity-75 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-2xl p-6 w-full max-w-md mx-4 border-4 border-gradient-to-r from-pink-500 to-purple-500 max-h-[80vh] overflow-y-auto">
             <h3 className="text-2xl font-bold mb-4 text-gray-800">
@@ -128,45 +191,18 @@ function AppContent() {
         </div>
       )}
       {/* Conteúdo normal do app */}
-      <Router>
-        <div className="app-container max-w-md md:max-w-7xl mx-auto px-4 py-4 pb-20">
-          <Routes>
-            <Route path="/" element={<AgendaPage />} />
-            <Route path="/oradores" element={<OradoresPage />} />
-            <Route path="/temas" element={<TemasPage />} />
-            <Route path="/saidas" element={<SaidasPage />} />
-            <Route path="/datas-especiais" element={<DatasEspeciaisPage />} />
-            <Route path="/config" element={<ConfigPage />} />
-          </Routes>
-          <BottomNavigation />
-        </div>
-        <GoogleDriveStatusBar autoBackup={!!congregacao?.autoBackup} />
-        <PWAInstallPrompt />
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 3000,
-            style: {
-              background: "#363636",
-              color: "#fff",
-            },
-            success: {
-              duration: 3000,
-              iconTheme: {
-                primary: "#10B981",
-                secondary: "#fff",
-              },
-            },
-            error: {
-              duration: 4000,
-              iconTheme: {
-                primary: "#EF4444",
-                secondary: "#fff",
-              },
-            },
-          }}
-        />
-      </Router>
+      <div className="app-container max-w-md md:max-w-7xl mx-auto px-4 py-4 pb-20">
+        <Routes>
+          <Route path="/" element={<AgendaPage />} />
+          <Route path="/oradores" element={<OradoresPage />} />
+          <Route path="/temas" element={<TemasPage />} />
+          <Route path="/saidas" element={<SaidasPage />} />
+          <Route path="/datas-especiais" element={<DatasEspeciaisPage />} />
+          <Route path="/config" element={<ConfigPage />} />
+          <Route path="/qrcode" element={<QRCodePage />} />
+        </Routes>
+        <BottomNavigation />
+      </div>
     </>
   );
 }

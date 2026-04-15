@@ -48,12 +48,29 @@ function ModalOrador({
   const [mostrandoHistorico, setMostrandoHistorico] = useState(false);
   const [temasDisponiveis, setTemasDisponiveis] = useState<Tema[]>([]);
   const [temasSelecionados, setTemasSelecionados] = useState<Set<number>>(
-    new Set()
+    new Set(),
   );
   const [mostrandoModalSelecao, setMostrandoModalSelecao] = useState(false);
   const [configuracao, setConfiguracao] = useState<Configuracao | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [erroTelefone, setErroTelefone] = useState<string>("");
   const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
+
+  // Funções para validação e formatação de telefone
+  const extrairNumerosTelefone = (telefone: string): string => {
+    return telefone.replace(/\D+/g, "");
+  };
+
+  const validarTelefone = (telefone: string): boolean => {
+    const numeros = extrairNumerosTelefone(telefone);
+    // Validar exatamente 10 ou 11 dígitos
+    return numeros.length === 10 || numeros.length === 11;
+  };
+
+  const formatarInputTelefone = (valor: string): string => {
+    // Aceita APENAS números
+    return valor.replace(/\D+/g, "");
+  };
 
   const carregarDadosOrador = async () => {
     if (!orador) {
@@ -70,13 +87,13 @@ function ModalOrador({
         .toArray();
       const temasVinculadosIds = vinculos.map((v) => v.temaId);
       const temasVinculadosData = await Promise.all(
-        temasVinculadosIds.map((id) => db.temas.get(id))
+        temasVinculadosIds.map((id) => db.temas.get(id)),
       );
       const temasVinculadosValidos = temasVinculadosData.filter(
-        (t) => t !== undefined
+        (t) => t !== undefined,
       ) as Tema[];
       setTemasVinculados(
-        temasVinculadosValidos.sort((a, b) => a.numero - b.numero)
+        temasVinculadosValidos.sort((a, b) => a.numero - b.numero),
       );
 
       // Buscar discursos do orador para o histórico
@@ -97,12 +114,12 @@ function ModalOrador({
             tema,
             tipo: discurso.tipo,
           };
-        })
+        }),
       );
       setHistoricoDiscursos(
         historico.sort(
-          (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()
-        )
+          (a, b) => new Date(b.data).getTime() - new Date(a.data).getTime(),
+        ),
       );
     } catch (error) {
       console.error("Erro ao carregar dados do orador:", error);
@@ -171,6 +188,7 @@ function ModalOrador({
       setOradorLocal(orador);
       setEditando(false);
       setMostrandoHistorico(false);
+      setErroTelefone("");
       carregarDadosOrador();
     } else if (isOpen && !orador) {
       // Modo adicionar novo orador
@@ -185,6 +203,7 @@ function ModalOrador({
       } as Orador);
       setEditando(true);
       setMostrandoHistorico(false);
+      setErroTelefone("");
       setTemasVinculados([]);
       setHistoricoDiscursos([]);
       setTemasSelecionados(new Set()); // Resetar seleção
@@ -211,6 +230,15 @@ function ModalOrador({
       return;
     }
 
+    // Validação de telefone se preenchido
+    if (oradorLocal.telefone && oradorLocal.telefone.trim() !== "") {
+      if (!validarTelefone(oradorLocal.telefone)) {
+        setErroTelefone("Telefone deve ter exatamente 10 ou 11 dígitos");
+        toast.error("Telefone inválido! Deve ter 10 ou 11 dígitos.");
+        return;
+      }
+    }
+
     setSalvando(true);
     try {
       let oradorId: number;
@@ -221,7 +249,7 @@ function ModalOrador({
           { ...oradorLocal, id: orador.id },
           configuracao?.autoBackup ?? false,
           isSignedIn,
-          uploadBackup
+          uploadBackup,
         );
         oradorId = orador.id!;
         toast.success("Orador atualizado com sucesso!");
@@ -233,7 +261,7 @@ function ModalOrador({
           novoOrador,
           configuracao?.autoBackup ?? false,
           isSignedIn,
-          uploadBackup
+          uploadBackup,
         );
         oradorId = (await db.oradores
           .where("nome")
@@ -257,13 +285,13 @@ function ModalOrador({
           .toArray();
         const temasVinculadosIds = vinculos.map((v) => v.temaId);
         const temasVinculadosData = await Promise.all(
-          temasVinculadosIds.map((id) => db.temas.get(id))
+          temasVinculadosIds.map((id) => db.temas.get(id)),
         );
         const temasVinculadosValidos = temasVinculadosData.filter(
-          (t) => t !== undefined
+          (t) => t !== undefined,
         ) as Tema[];
         setTemasVinculados(
-          temasVinculadosValidos.sort((a, b) => a.numero - b.numero)
+          temasVinculadosValidos.sort((a, b) => a.numero - b.numero),
         );
         console.log("Temas vinculados atualizados:", temasVinculadosValidos);
       }
@@ -296,7 +324,7 @@ function ModalOrador({
         novosVinculos,
         configuracao?.autoBackup ?? false,
         isSignedIn,
-        uploadBackup
+        uploadBackup,
       );
     } catch (error) {
       console.error("Erro ao sincronizar vínculos de temas:", error);
@@ -325,8 +353,8 @@ function ModalOrador({
                   {mostrandoHistorico
                     ? `Histórico`
                     : orador
-                    ? oradorLocal.nome
-                    : "Adicionar Orador"}
+                      ? oradorLocal.nome
+                      : "Adicionar Orador"}
                 </h2>
                 {orador && !mostrandoHistorico && (
                   <p className="text-sm text-gray-600 mt-1">
@@ -390,7 +418,7 @@ function ModalOrador({
                     {historicoDiscursos.map(
                       (
                         item: { data: string; tema: Tema | null; tipo: string },
-                        index: number
+                        index: number,
                       ) => (
                         <div
                           key={index}
@@ -438,7 +466,7 @@ function ModalOrador({
                             </div>
                           </div>
                         </div>
-                      )
+                      ),
                     )}
                   </div>
                 )}
@@ -482,18 +510,36 @@ function ModalOrador({
                         <Phone className="w-4 h-4 text-gray-400" />
                       </div>
                       {editando ? (
-                        <input
-                          type="text"
-                          value={oradorLocal.telefone}
-                          onChange={(e) =>
-                            setOradorLocal({
-                              ...oradorLocal,
-                              telefone: e.target.value,
-                            })
-                          }
-                          className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors"
-                          placeholder="Telefone de contato"
-                        />
+                        <div>
+                          <input
+                            type="tel"
+                            value={oradorLocal.telefone}
+                            onChange={(e) => {
+                              const formatado = formatarInputTelefone(
+                                e.target.value,
+                              );
+                              setOradorLocal({
+                                ...oradorLocal,
+                                telefone: formatado,
+                              });
+                              // Limpar erro quando usuário começa a corrigir
+                              if (erroTelefone && formatado) {
+                                setErroTelefone("");
+                              }
+                            }}
+                            className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              erroTelefone
+                                ? "border-red-500 focus:ring-red-500"
+                                : "border-gray-300 focus:ring-purple-500"
+                            }`}
+                            placeholder="Telefone (10 ou 11 dígitos, ex: 11999999999)"
+                          />
+                          {erroTelefone && (
+                            <p className="text-red-500 text-sm mt-1">
+                              {erroTelefone}
+                            </p>
+                          )}
+                        </div>
                       ) : (
                         <div className="w-full pl-10 pr-3 py-1 text-gray-900 border border-gray-300 rounded-lg">
                           {oradorLocal.telefone || "Não informado"}
@@ -710,7 +756,7 @@ function ModalOrador({
                         <div className="space-y-2 max-h-64 overflow-y-auto">
                           {Array.from(temasSelecionados).map((temaId) => {
                             const tema = temasDisponiveis.find(
-                              (t) => t.id === temaId
+                              (t) => t.id === temaId,
                             );
                             return tema ? (
                               <div
@@ -726,7 +772,7 @@ function ModalOrador({
                                   <button
                                     onClick={() => {
                                       const newSelecionados = new Set(
-                                        temasSelecionados
+                                        temasSelecionados,
                                       );
                                       newSelecionados.delete(temaId);
                                       setTemasSelecionados(newSelecionados);
@@ -843,7 +889,7 @@ function ModalOrador({
         onClose={() => setMostrandoModalSelecao(false)}
         onConfirm={handleSelecionarDiscursos}
         discursosJaVinculados={temasDisponiveis.filter((tema) =>
-          temasSelecionados.has(tema.id!)
+          temasSelecionados.has(tema.id!),
         )}
         persistOnConfirm={false}
         oradorId={oradorLocal?.id}

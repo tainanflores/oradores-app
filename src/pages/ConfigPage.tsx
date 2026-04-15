@@ -7,11 +7,18 @@ import {
   restaurarBackup,
 } from "../utils/backup";
 import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
+import { useConfig } from "../contexts/ConfigContext";
 import {
   listBackupsFromDrive,
   downloadBackupFromDrive,
 } from "../utils/googleDrive";
 import { dbSaveWithBackup } from "../utils/dbWithBackup";
+import ModalVincularWhatsapp from "../components/ModalVincularWhatsapp";
+import ModalEditarTemplateWhatsapp from "../components/ModalEditarTemplateWhatsapp";
+import {
+  deleteInstancia,
+  verificarStatusComTimeout,
+} from "../utils/whatsappEvolutionApi";
 import {
   Settings,
   Building,
@@ -25,10 +32,19 @@ import {
   Link,
   CheckCircle,
   XCircle,
+  MessageCircle,
+  Code,
 } from "lucide-react";
+import { TEMPLATE_PADRAO } from "../utils/whatsappTemplate";
 
 function ConfigPage() {
   const [showCongregacaoModal, setShowCongregacaoModal] = useState(false);
+  const [showWhatsappModal, setShowWhatsappModal] = useState(false);
+  const [showEditarTemplateModal, setShowEditarTemplateModal] = useState(false);
+  const [whatsappStatus, setWhatsappStatus] = useState<
+    "desconectado" | "conectado" | "aguardando_conexao"
+  >("desconectado");
+  const [whatsappNumero, setWhatsappNumero] = useState("");
   const [autoBackup, setAutoBackup] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [importLoading, setImportLoading] = useState(false);
@@ -43,6 +59,7 @@ function ConfigPage() {
     email: "",
     cidade: "",
     autoBackup: false,
+    templateMensagemWhatsapp: TEMPLATE_PADRAO,
   });
   // Google Drive Auth Context
   const {
@@ -51,10 +68,14 @@ function ConfigPage() {
     signIn: handleGoogleSignIn,
     signOut: handleGoogleSignOut,
     uploadBackup,
+    attemptSilentSignIn,
   } = useGoogleDriveAuth();
+  // Config Context - Para atualizar o contexto global
+  const { setCongregacao: setContextCongregacao } = useConfig();
 
   useEffect(() => {
     carregarConfiguracoes();
+    carregarStatusWhatsapp();
     // Remover qualquer lógica que abra o modal de congregação automaticamente aqui
     // O modal só deve ser aberto por ação do usuário
   }, []);
@@ -62,25 +83,81 @@ function ConfigPage() {
   // Backup automático no Google Drive
   useEffect(() => {
     if (autoBackup && isSignedIn) {
-      const interval = setInterval(async () => {
-        try {
-          const backupData = await import("../utils/backup").then((m) =>
-            m.exportarDados()
-          );
-          const timestamp = new Date()
-            .toISOString()
-            .slice(0, 19)
-            .replace(/:/g, "-");
-          const fileName = `backup-auto-oradores-${timestamp}.json`;
-          await uploadBackup(JSON.stringify(backupData), fileName);
-          console.log("Backup automático realizado no Google Drive");
-        } catch (error) {
-          console.error("Erro no backup automático:", error);
-        }
-      }, 24 * 60 * 60 * 1000); // 24 horas
+      const interval = setInterval(
+        async () => {
+          try {
+            const backupData = await import("../utils/backup").then((m) =>
+              m.exportarDados(),
+            );
+            const timestamp = new Date()
+              .toISOString()
+              .slice(0, 19)
+              .replace(/:/g, "-");
+            const fileName = `backup-auto-oradores-${timestamp}.json`;
+            await uploadBackup(JSON.stringify(backupData), fileName);
+            console.log("Backup automático realizado no Google Drive");
+          } catch (error) {
+            console.error("Erro no backup automático:", error);
+          }
+        },
+        24 * 60 * 60 * 1000,
+      ); // 24 horas
       return () => clearInterval(interval);
     }
   }, [autoBackup, isSignedIn, uploadBackup]);
+
+  const carregarStatusWhatsapp = async () => {
+    try {
+      const instancia = await db.whatsappInstancias.get(1);
+      if (instancia) {
+        // Verificar status real na Evolution API com timeout
+        try {
+          const estadoReal = await verificarStatusComTimeout(
+            instancia.numero,
+            10000, // timeout de 10 segundos
+          );
+
+          // Mapear estado da Evolution para nosso status
+          let novoStatus: "desconectado" | "conectado" | "aguardando_conexao" =
+            "desconectado";
+          if (estadoReal === "open") {
+            novoStatus = "conectado";
+          } else if (estadoReal === "connecting") {
+            novoStatus = "aguardando_conexao";
+          }
+
+          // Atualizar BD com status real
+          await db.whatsappInstancias
+            .where("numero")
+            .equals(instancia.numero)
+            .modify({
+              status: novoStatus,
+            });
+
+          setWhatsappStatus(novoStatus);
+          setWhatsappNumero(instancia.numero);
+        } catch (err) {
+          // Se falhar ao verificar na API, considerar como desconectado
+          console.error("Erro ao verificar status na Evolution:", err);
+          await db.whatsappInstancias
+            .where("numero")
+            .equals(instancia.numero)
+            .modify({
+              status: "desconectado",
+            });
+          setWhatsappStatus("desconectado");
+          setWhatsappNumero(instancia.numero);
+        }
+      } else {
+        setWhatsappStatus("desconectado");
+        setWhatsappNumero("");
+      }
+    } catch (error) {
+      console.error("Erro ao carregar status WhatsApp:", error);
+      setWhatsappStatus("desconectado");
+      setWhatsappNumero("");
+    }
+  };
 
   const carregarConfiguracoes = async () => {
     try {
@@ -101,13 +178,14 @@ function ConfigPage() {
           email: "",
           cidade: "",
           autoBackup: false,
+          templateMensagemWhatsapp: TEMPLATE_PADRAO,
         };
         await dbSaveWithBackup(
           "configuracoes",
           configPadrao,
           false,
           isSignedIn,
-          uploadBackup
+          uploadBackup,
         );
         setCongregacao(configPadrao);
         setAutoBackup(false);
@@ -126,7 +204,7 @@ function ConfigPage() {
     } catch (error) {
       console.error("Erro ao fazer backup:", error);
       toast.error(
-        error instanceof Error ? error.message : "Erro ao fazer backup"
+        error instanceof Error ? error.message : "Erro ao fazer backup",
       );
     } finally {
       setBackupLoading(false);
@@ -148,7 +226,7 @@ function ConfigPage() {
     } catch (error) {
       console.error("Erro ao importar backup:", error);
       toast.error(
-        error instanceof Error ? error.message : "Erro ao importar backup"
+        error instanceof Error ? error.message : "Erro ao importar backup",
       );
     } finally {
       setImportLoading(false);
@@ -165,7 +243,7 @@ function ConfigPage() {
     }
     try {
       const backupData = await import("../utils/backup").then((m) =>
-        m.exportarDados()
+        m.exportarDados(),
       );
       const timestamp = new Date()
         .toISOString()
@@ -179,12 +257,25 @@ function ConfigPage() {
       toast.error(
         error instanceof Error
           ? error.message
-          : "Erro ao fazer backup no Google Drive"
+          : "Erro ao fazer backup no Google Drive",
       );
     }
   };
 
-  // Ajuste em handleSaveCongregacao para não fechar o modal se faltar campos obrigatórios
+  const handleDesconectarWhatsapp = async () => {
+    if (!window.confirm("Deseja desconectar o WhatsApp?")) return;
+
+    try {
+      await deleteInstancia(whatsappNumero);
+      setWhatsappStatus("desconectado");
+      setWhatsappNumero("");
+      toast.success("WhatsApp desconectado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao desconectar WhatsApp:", error);
+      toast.error("Erro ao desconectar WhatsApp");
+    }
+  };
+
   const handleSaveCongregacao = async () => {
     if (
       !congregacao.nomeCongregacao ||
@@ -206,7 +297,7 @@ function ConfigPage() {
         configParaSalvar,
         autoBackup,
         isSignedIn,
-        uploadBackup
+        uploadBackup,
       );
       toast.success("Configurações da congregação salvas com sucesso!");
       setShowCongregacaoModal(false);
@@ -222,14 +313,36 @@ function ConfigPage() {
   const handleToggleAutoBackup = async () => {
     if (!autoBackup) {
       // Vai ativar
+      let loginSuccess = isSignedIn; // Flag para rastrear se o login foi bem-sucedido
+
       if (!isSignedIn) {
         if (
           window.confirm(
-            "Para ativar o backup automático, é necessário conectar com sua conta do Google Drive. Deseja conectar agora?"
+            "Para ativar o backup automático, é necessário conectar com sua conta do Google Drive. Deseja conectar agora?",
           )
         ) {
-          await handleGoogleSignIn();
-          if (!isSignedIn) {
+          // ✅ NOVO: Tentar login silencioso PRIMEIRO
+          toast.loading("Tentando conexão silenciosa...");
+          const silentLoginSuccess = await attemptSilentSignIn();
+          toast.dismiss();
+
+          if (!silentLoginSuccess) {
+            // Se silent sign-in falhar, abrir login manual
+            toast.loading("Abrindo login do Google Drive...");
+            try {
+              await handleGoogleSignIn();
+              loginSuccess = true;
+            } catch (error) {
+              console.error("Erro ao fazer login:", error);
+              loginSuccess = false;
+            }
+            toast.dismiss();
+          } else {
+            toast.success("Conectado ao Google Drive!");
+            loginSuccess = true;
+          }
+
+          if (!loginSuccess) {
             toast.error("Conexão com o Google Drive não realizada.");
             return;
           }
@@ -237,50 +350,68 @@ function ConfigPage() {
           return;
         }
       }
+
       if (
         window.confirm(
-          "O backup automático irá salvar uma cópia dos dados no Google Drive toda vez que você salvar alguma alteração. Deseja ativar?"
+          "O backup automático irá salvar uma cópia dos dados no Google Drive toda vez que você salvar alguma alteração. Deseja ativar?",
         )
       ) {
         setAutoBackup(true);
-        await dbSaveWithBackup(
-          "configuracoes",
-          { ...congregacao, autoBackup: true },
-          false, // Não fazer backup automático aqui para evitar loop
-          isSignedIn,
-          uploadBackup,
-          false // Não mostrar toast pois já vamos mostrar um customizado
-        );
-        // Garante que o valor salvo é booleano
-        const configAtualizada = await db.configuracoes.get(1);
-        if (configAtualizada) {
-          const autoBackupBool = configAtualizada.autoBackup === true;
-          setCongregacao({ ...configAtualizada, autoBackup: autoBackupBool });
+        try {
+          await dbSaveWithBackup(
+            "configuracoes",
+            { ...congregacao, autoBackup: true },
+            false, // Não fazer backup automático aqui para evitar loop
+            loginSuccess || isSignedIn,
+            uploadBackup,
+            false, // Não mostrar toast pois já vamos mostrar um customizado
+          );
+          // Garante que o valor salvo é booleano
+          const configAtualizada = await db.configuracoes.get(1);
+          if (configAtualizada) {
+            const autoBackupBool = configAtualizada.autoBackup === true;
+            setCongregacao({ ...configAtualizada, autoBackup: autoBackupBool });
+            setContextCongregacao({
+              ...configAtualizada,
+              autoBackup: autoBackupBool,
+            });
+          }
+          toast.success("Backup automático ativado!");
+        } catch (error) {
+          console.error("Erro ao ativar backup automático:", error);
+          toast.error("Erro ao ativar backup automático. Tente novamente.");
+          setAutoBackup(false);
         }
-        toast.success("Backup automático ativado!");
       }
     } else {
       // Vai desativar
       if (
         window.confirm(
-          "Deseja realmente desativar o backup automático no Google Drive?"
+          "Deseja realmente desativar o backup automático no Google Drive?",
         )
       ) {
         setAutoBackup(false);
-        await dbSaveWithBackup(
-          "configuracoes",
-          { ...congregacao, autoBackup: false },
-          false, // Não fazer backup automático aqui
-          isSignedIn,
-          uploadBackup,
-          false // Não mostrar toast pois já vamos mostrar um customizado
-        );
-        // Garante que o valor salvo é booleano
-        const configAtualizada = await db.configuracoes.get(1);
-        if (configAtualizada) {
-          setCongregacao({ ...configAtualizada, autoBackup: false });
+        try {
+          await dbSaveWithBackup(
+            "configuracoes",
+            { ...congregacao, autoBackup: false },
+            false, // Não fazer backup automático aqui
+            isSignedIn,
+            uploadBackup,
+            false, // Não mostrar toast pois já vamos mostrar um customizado
+          );
+          // Garante que o valor salvo é booleano
+          const configAtualizada = await db.configuracoes.get(1);
+          if (configAtualizada) {
+            setCongregacao({ ...configAtualizada, autoBackup: false });
+            setContextCongregacao({ ...configAtualizada, autoBackup: false });
+          }
+          toast.success("Backup automático desativado.");
+        } catch (error) {
+          console.error("Erro ao desativar backup automático:", error);
+          toast.error("Erro ao desativar backup automático. Tente novamente.");
+          setAutoBackup(true);
         }
-        toast.success("Backup automático desativado.");
       }
     }
   };
@@ -289,7 +420,7 @@ function ConfigPage() {
   const handleGoogleSignOutWithWarning = async () => {
     if (
       !window.confirm(
-        "Tem certeza que deseja desconectar do Google Drive? Isso irá desativar o backup automático, se estiver ativo."
+        "Tem certeza que deseja desconectar do Google Drive? Isso irá desativar o backup automático, se estiver ativo.",
       )
     ) {
       return;
@@ -302,7 +433,7 @@ function ConfigPage() {
         false, // Não fazer backup automático aqui
         isSignedIn,
         uploadBackup,
-        false // Não mostrar toast pois já vamos mostrar um customizado
+        false, // Não mostrar toast pois já vamos mostrar um customizado
       );
       toast("Backup automático desativado.");
     }
@@ -322,8 +453,8 @@ function ConfigPage() {
       if (
         !window.confirm(
           `Restaurar backup "${file.name}" de ${new Date(
-            file.createdTime
-          ).toLocaleString()}?`
+            file.createdTime,
+          ).toLocaleString()}?`,
         )
       )
         return;
@@ -503,7 +634,97 @@ function ConfigPage() {
             </div>
           </div>
         </section>
+
+        {/* WhatsApp */}
+        <section
+          id="whatsapp-config"
+          className="bg-white p-6 rounded-lg shadow border border-gray-200"
+        >
+          <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+            <MessageCircle className="w-5 h-5 text-green-600" />
+            WhatsApp
+          </h3>
+          <p className="text-gray-600 text-sm mb-4">
+            Conecte seu números WhatsApp para enviar mensagens pelo aplicativo.
+          </p>
+
+          {/* Status WhatsApp */}
+          <div className="mb-4 p-3 rounded-lg bg-gray-50 border border-gray-200">
+            {whatsappStatus === "conectado" ? (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></span>
+                  <div>
+                    <p className="text-sm font-medium text-green-700">
+                      ✓ Conectado
+                    </p>
+                    <p className="text-xs text-gray-600">{whatsappNumero}</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 bg-gray-400 rounded-full"></span>
+                <p className="text-sm font-medium text-gray-600">
+                  ✗ Desconectado
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Botões de Ação */}
+          <div className="flex gap-2">
+            {whatsappStatus === "conectado" ? (
+              <>
+                <button
+                  onClick={() => setShowEditarTemplateModal(true)}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Code className="w-4 h-4" />
+                  Editar Mensagem
+                </button>
+                <button
+                  onClick={handleDesconectarWhatsapp}
+                  className="flex-1 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Desconectar
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setShowWhatsappModal(true)}
+                className="flex-1 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <MessageCircle className="w-4 h-4" />
+                Vincular WhatsApp
+              </button>
+            )}
+          </div>
+        </section>
       </div>
+
+      {/* Modal Vincular WhatsApp */}
+      <ModalVincularWhatsapp
+        open={showWhatsappModal}
+        onClose={() => setShowWhatsappModal(false)}
+        onSuccess={() => {
+          toast.success("WhatsApp conectado com sucesso!");
+          carregarStatusWhatsapp();
+        }}
+      />
+
+      {/* Modal Editar Template de Mensagem */}
+      <ModalEditarTemplateWhatsapp
+        isOpen={showEditarTemplateModal}
+        onClose={() => setShowEditarTemplateModal(false)}
+        congregacao={congregacao}
+        onSave={(congregacaoAtualizada) => {
+          setCongregacao(congregacaoAtualizada);
+          // Atualizar também o contexto para refletir nos outros componentes
+          setContextCongregacao(congregacaoAtualizada);
+        }}
+      />
 
       {/* Modal de Configurações da Congregação */}
       {showCongregacaoModal && (

@@ -25,6 +25,7 @@ interface GoogleDriveAuthContextType {
   signIn: () => Promise<void>;
   signOut: () => void;
   uploadBackup: (json: string, fileName?: string) => Promise<string>;
+  attemptSilentSignIn: () => Promise<boolean>;
 }
 
 /* =====================================================
@@ -37,7 +38,13 @@ const GoogleDriveAuthContext = createContext<
 /* =====================================================
    PROVIDER
    ===================================================== */
-export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
+export function GoogleDriveAuthProvider({
+  children,
+  autoBackupEnabled = false,
+}: {
+  children: ReactNode;
+  autoBackupEnabled?: boolean;
+}) {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hasTriedSilentSignIn, setHasTriedSilentSignIn] = useState(false);
@@ -56,6 +63,7 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
       wasAuthorized,
       explicitlyLoggedOut,
       hasTriedSilentSignIn,
+      autoBackupEnabled,
     });
 
     if (explicitlyLoggedOut) {
@@ -68,6 +76,13 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
     }
     if (hasTriedSilentSignIn) {
       console.log("[GoogleDriveContext] Já tentou silent sign-in");
+      return;
+    }
+    // ✅ NOVO: Só tenta silentSignIn se autoBackup está ativado
+    if (!autoBackupEnabled) {
+      console.log(
+        "[GoogleDriveContext] AutoBackup desativado, pulando silent sign-in",
+      );
       return;
     }
 
@@ -86,7 +101,7 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
       }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [autoBackupEnabled]);
 
   /* =====================================================
      LOGIN MANUAL
@@ -111,6 +126,30 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  /* =====================================================
+     SILENT SIGN-IN (Manual Attempt - Atualiza Estado)
+     ===================================================== */
+  const attemptSilentSignIn = async (): Promise<boolean> => {
+    try {
+      const success = await silentSignInService();
+      if (success) {
+        setIsSignedIn(true);
+        localStorage.setItem("googleDriveAuthorized", "true");
+        localStorage.removeItem("gdrive_explicitly_logged_out");
+        console.log(
+          "[GoogleDriveContext] Silent sign-in bem-sucedido e estado atualizado",
+        );
+        return true;
+      } else {
+        console.log("[GoogleDriveContext] Silent sign-in falhou");
+        return false;
+      }
+    } catch (err) {
+      console.error("[GoogleDriveContext] Erro ao tentar silent sign-in:", err);
+      return false;
     }
   };
 
@@ -189,6 +228,7 @@ export function GoogleDriveAuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         uploadBackup,
+        attemptSilentSignIn,
       }}
     >
       {children}

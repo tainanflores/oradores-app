@@ -71,6 +71,17 @@ export interface Configuracao {
   email?: string;
   cidade: string;
   autoBackup: boolean;
+  templateMensagemWhatsapp?: string; // Template customizável para mensagens de confirmação
+}
+
+export interface WhatsappInstancia {
+  id?: number;
+  instanciaId: string; // Hash da Evolution
+  nome: string; // Nome da instância (ex: "pessoal")
+  numero: string; // Celular registrado
+  status: "desconectado" | "conectado" | "aguardando_conexao";
+  numeroConectado?: string; // Se conectou
+  dataCriacao: Date;
 }
 
 // Classe do banco de dados
@@ -84,6 +95,7 @@ export class OradoresDB extends Dexie {
   datasEspeciais!: Table<DataEspecial>;
   temasBloqueados!: Table<TemaBloqueado>;
   configuracoes!: Table<Configuracao>;
+  whatsappInstancias!: Table<WhatsappInstancia>;
 
   constructor() {
     super("OradoresDB"); // Nome do banco IndexedDB
@@ -97,6 +109,7 @@ export class OradoresDB extends Dexie {
       datasEspeciais: "++id, data, tipo",
       temasBloqueados: "++id, temaId, ano",
       configuracoes: "++id",
+      whatsappInstancias: "++id, numero",
     });
   }
 }

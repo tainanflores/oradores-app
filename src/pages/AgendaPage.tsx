@@ -93,7 +93,6 @@ function AgendaPage() {
       setDatasEspeciais(datasEspeciaisData);
       // Buscar lembretes pendentes
       const pendentes = await getDiscursosPendentesLembrete();
-      console.log("Lembretes pendentes:", pendentes);
       setLembretePendentes(pendentes);
       setShowLembreteModal(pendentes.length > 0);
     } catch (e) {
@@ -162,7 +161,20 @@ function AgendaPage() {
       `\n• Precisa de ajuda de custo com combustível?` +
       `\n\nQualquer dúvida, estamos à disposição!\n\nAbraço!`;
     toast.loading("Enviando lembrete...");
-    const result = await sendWhatsappEvolution({ numero, texto: mensagem });
+
+    // Buscar nome da instância do BD
+    const instancia = await db.whatsappInstancias.get(1);
+    if (!instancia || !instancia.nome) {
+      toast.dismiss();
+      toast.error("Instância do WhatsApp não configurada");
+      return;
+    }
+
+    const result = await sendWhatsappEvolution({
+      numero,
+      texto: mensagem,
+      nomeInstancia: instancia.nome,
+    });
     toast.dismiss();
     if (result.success && result.response?.status) {
       toast.success("Lembrete enviado!");

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   db,
   type Orador,
@@ -24,6 +25,12 @@ import {
   Loader2,
 } from "lucide-react";
 import { sendWhatsappEvolution } from "../utils/sendWhatsappEvolution";
+import { verificarEAtualizarStatusBD } from "../utils/whatsappEvolutionApi";
+import {
+  formatarMensagemTemplate,
+  obterTemplate,
+  type TemplateVars,
+} from "../utils/whatsappTemplate";
 
 interface ModalAgendamentoProps {
   isOpen: boolean;
@@ -68,6 +75,7 @@ function ModalAgendamento({
 
   const { congregacao } = useConfig();
   const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
+  const navigate = useNavigate();
 
   // Carregar dados quando o modal abre ou quando há trigger de reload
   useEffect(() => {
@@ -163,13 +171,13 @@ function ModalAgendamento({
 
           // Último discurso (datas anteriores a hoje)
           const discursosAnteriores = discursosOrador.filter(
-            (d) => d.data < hoje
+            (d) => d.data < hoje,
           );
 
           if (discursosAnteriores.length > 0) {
             // Ordenar por data decrescente e pegar o primeiro (mais recente)
             const ultimo = discursosAnteriores.sort((a, b) =>
-              b.data.localeCompare(a.data)
+              b.data.localeCompare(a.data),
             )[0];
             const tema = await db.temas.get(ultimo.temaId);
             setUltimoDiscurso({
@@ -211,47 +219,92 @@ function ModalAgendamento({
   const handleWhatsapp = async () => {
     if (!selectedOrador || !selectedOrador.telefone) {
       toast.error(
-        "Cadastre o número de telefone do orador para usar o WhatsApp."
+        "Cadastre o número de telefone do orador para usar o WhatsApp.",
       );
       return;
     }
+
+    // Verificar se tem instância conectada no BD
+    toast.loading("Verificando conexão do WhatsApp...");
+    try {
+      const statusAtual = await verificarEAtualizarStatusBD();
+
+      toast.dismiss();
+
+      if (statusAtual !== "conectado") {
+        toast.error(
+          "WhatsApp não está conectado. Conecte primeiro na configuração.",
+        );
+        // Redirecionar para Config e scroll para a seção de WhatsApp
+        navigate("/config");
+        // Scroll após navegação
+        setTimeout(() => {
+          const whatsappSection = document.getElementById("whatsapp-config");
+          if (whatsappSection) {
+            whatsappSection.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+        return;
+      }
+    } catch (err) {
+      toast.dismiss();
+      console.error("Erro ao verificar WhatsApp:", err);
+      toast.error("Erro ao verificar status do WhatsApp");
+      return;
+    }
+
+    // Confirmação antes de enviar
     if (
       !window.confirm("Deseja enviar a mensagem de confirmação para o orador?")
     ) {
       return;
     }
+
     const numero = selectedOrador.telefone.replace(/\D/g, "");
     const temaObj = temas.find((t) => t.id === Number(selectedTema)) || null;
     const horario = congregacao?.horarioReuniao || "";
-    const dataFormatada = dataSelecionada?.toLocaleDateString("pt-BR", {
-      weekday: "long",
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    const dataFormatada =
+      dataSelecionada?.toLocaleDateString("pt-BR", {
+        weekday: "long",
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      }) || "";
     const nomeCongregacao = congregacao?.nomeCongregacao || "";
     const cidadeCongregacao = congregacao?.cidade || "";
-    const mensagem =
-      `✅ *Confirmação de Discurso*\n\nOlá ${selectedOrador.nome}!\n\n` +
-      `Seu discurso está agendado para:\n` +
-      `📅 *${dataFormatada}*\n` +
-      `🕒 *Horário:* ${horario}\n` +
-      `*Tema:* ${
-        temaObj ? temaObj.numero + ". " + temaObj.titulo : "(tema não definido)"
-      }\n` +
-      `\nLocal: *${nomeCongregacao} - ${cidadeCongregacao}*\n` +
-      `\nPor favor, confirme seu comparecimento e as informações abaixo:\n` +
-      `\n• Cântico?` +
-      `\n• Usará imagens?` +
-      `\n• Vai precisar de hospedagem?` +
-      `\n• Precisa de ajuda de custo com combustível?` +
-      `\n\nQualquer dúvida, estamos à disposição!\n\nAbraço!`;
-    // ATENÇÃO: Não é seguro expor tokens no frontend. Use backend para produção!
+    const temaFormatado = temaObj
+      ? `${temaObj.numero}. ${temaObj.titulo}`
+      : "(tema não definido)";
+
+    // Usar template customizado ou padrão
+    const template = obterTemplate(congregacao?.templateMensagemWhatsapp);
+    const templateVars: TemplateVars = {
+      nome: selectedOrador.nome,
+      data: dataFormatada,
+      hora: horario,
+      tema: temaFormatado,
+      temaNro: temaObj?.numero.toString() || "",
+      temaTitulo: temaObj?.titulo || "",
+      congregacao: nomeCongregacao,
+      cidade: cidadeCongregacao,
+      local: `${nomeCongregacao} - ${cidadeCongregacao}`,
+    };
+    const mensagem = formatarMensagemTemplate(template, templateVars);
 
     toast.loading("Enviando mensagem...");
+
+    // Buscar nome da instância do BD
+    const instancia = await db.whatsappInstancias.get(1);
+    if (!instancia || !instancia.nome) {
+      toast.dismiss();
+      toast.error("Instância do WhatsApp não configurada");
+      return;
+    }
+
     const result = await sendWhatsappEvolution({
       numero,
       texto: mensagem,
+      nomeInstancia: instancia.nome,
     });
     toast.dismiss();
     if (result.success && result.response?.status) {
@@ -259,7 +312,7 @@ function ModalAgendamento({
     } else {
       toast.error(
         "Erro ao enviar mensagem: " +
-          (result.response?.message || result.error || "")
+          (result.response?.message || result.error || ""),
       );
     }
   };
@@ -316,7 +369,7 @@ function ModalAgendamento({
           { ...novoDiscurso, id: discursoExistente.id },
           Boolean(congregacao?.autoBackup),
           isSignedIn,
-          uploadBackup
+          uploadBackup,
         );
       } else {
         // Criar novo discurso
@@ -325,7 +378,7 @@ function ModalAgendamento({
           novoDiscurso,
           Boolean(congregacao?.autoBackup),
           isSignedIn,
-          uploadBackup
+          uploadBackup,
         );
       }
 
@@ -439,7 +492,7 @@ function ModalAgendamento({
     }
 
     const confirmacao = window.confirm(
-      "Tem certeza que deseja excluir este discurso? Esta ação não pode ser desfeita."
+      "Tem certeza que deseja excluir este discurso? Esta ação não pode ser desfeita.",
     );
 
     if (!confirmacao) return;
@@ -451,7 +504,7 @@ function ModalAgendamento({
         discursoExistente.id,
         Boolean(congregacao?.autoBackup),
         isSignedIn,
-        uploadBackup
+        uploadBackup,
       );
       toast.success("Discurso excluído com sucesso!");
 
@@ -681,7 +734,7 @@ function ModalAgendamento({
                     value={selectedTema}
                     onChange={(e) =>
                       setSelectedTema(
-                        e.target.value ? Number(e.target.value) : ""
+                        e.target.value ? Number(e.target.value) : "",
                       )
                     }
                     disabled={!isEditing}
@@ -721,8 +774,8 @@ function ModalAgendamento({
                 isEditing
                   ? "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
                   : discursoExistente
-                  ? "bg-red-600 text-white border-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:border-gray-400"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    ? "bg-red-600 text-white border-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:border-gray-400"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
               }`}
               disabled={loading}
             >
