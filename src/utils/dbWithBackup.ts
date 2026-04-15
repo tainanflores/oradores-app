@@ -17,8 +17,12 @@ export async function dbSaveWithBackup<T>(
   autoBackup: boolean,
   isSignedIn: boolean,
   uploadBackup: (json: string, fileName?: string) => Promise<string>,
-  showToast: boolean = true
+  showToast: boolean = true,
 ) {
+  console.log(
+    `[dbSaveWithBackup] Tabela: ${String(table)} | autoBackup: ${autoBackup} | isSignedIn: ${isSignedIn} | Vai fazer backup? ${autoBackup && isSignedIn}`,
+  );
+
   try {
     // Se for array, use bulkPut; se não, use put
     if (Array.isArray(data)) {
@@ -34,16 +38,23 @@ export async function dbSaveWithBackup<T>(
 
   if (autoBackup && isSignedIn) {
     try {
+      console.log(
+        `[dbSaveWithBackup] Enviando backup para Drive... Tabelas: ${String(table)}`,
+      );
       const backupData = await exportarDados();
       const timestamp = new Date()
         .toISOString()
         .slice(0, 19)
         .replace(/:/g, "-");
       const fileName = `backup-auto-oradores-${timestamp}.json`;
+      console.log(
+        `[dbSaveWithBackup] ✅ Backup enviado com sucesso! Nome: ${fileName}`,
+      );
       await uploadBackup(JSON.stringify(backupData), fileName);
       // Salva localmente o timestamp do backup para evitar conflito de versão
       localStorage.setItem("oradores_last_sync", String(Date.now()));
     } catch (err) {
+      console.error(`[dbSaveWithBackup] ❌ Erro ao enviar backup:`, err);
       if (showToast) toast.error("Falha ao enviar backup automático!");
     }
   }
@@ -64,8 +75,11 @@ export async function dbDeleteWithBackup(
   autoBackup: boolean,
   isSignedIn: boolean,
   uploadBackup: (json: string, fileName?: string) => Promise<string>,
-  showToast: boolean = true
+  showToast: boolean = true,
 ) {
+  console.log(
+    `[dbDeleteWithBackup] Tabela: ${String(table)} | ID: ${id} | autoBackup: ${autoBackup} | isSignedIn: ${isSignedIn} | Vai fazer backup? ${autoBackup && isSignedIn}`,
+  );
   try {
     // @ts-expect-error
     await db[table].delete(id);
@@ -77,16 +91,21 @@ export async function dbDeleteWithBackup(
 
   if (autoBackup && isSignedIn) {
     try {
+      console.log(
+        `[dbDeleteWithBackup] Enviando backup para Drive após deletar...`,
+      );
       const backupData = await exportarDados();
       const timestamp = new Date()
         .toISOString()
         .slice(0, 19)
         .replace(/:/g, "-");
       const fileName = `backup-auto-oradores-${timestamp}.json`;
+      console.log(`[dbDeleteWithBackup] ✅ Backup enviado com sucesso!`);
       await uploadBackup(JSON.stringify(backupData), fileName);
       // Salva localmente o timestamp do backup para evitar conflito de versão
       localStorage.setItem("oradores_last_sync", String(Date.now()));
     } catch (err) {
+      console.error(`[dbDeleteWithBackup] ❌ Erro ao enviar backup:`, err);
       if (showToast) toast.error("Falha ao enviar backup automático!");
     }
   }

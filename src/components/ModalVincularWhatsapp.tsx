@@ -6,6 +6,9 @@ import {
   deleteInstancia,
 } from "../utils/whatsappEvolutionApi";
 import { db } from "../database";
+import { dbSaveWithBackup, dbDeleteWithBackup } from "../utils/dbWithBackup";
+import { useConfig } from "../contexts/ConfigContext";
+import { useGoogleDriveAuth } from "../contexts/GoogleDriveAuthContext";
 
 interface Props {
   open: boolean;
@@ -18,6 +21,10 @@ export default function ModalVincularWhatsapp({
   onClose,
   onSuccess,
 }: Props) {
+  // Hooks
+  const { congregacao } = useConfig();
+  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
+
   const [numero, setNumero] = useState("");
   const [numeroConfirmado, setNumeroConfirmado] = useState("");
   const [instanceName, setInstanceName] = useState("");
@@ -93,6 +100,16 @@ export default function ModalVincularWhatsapp({
         setStatus("criando");
         const resultado = await createInstancia(numeroConfirmado);
         setInstanceName(resultado.instanceName);
+
+        // Salvar instância no BD com backup automático
+        await dbSaveWithBackup(
+          "whatsappInstancias",
+          resultado.whatsappInstancia,
+          Boolean(congregacao?.autoBackup),
+          isSignedIn,
+          uploadBackup,
+          false, // Não mostrar toast pois vamos mostrar nosso próprio
+        );
       }
 
       // Preparar conexão
@@ -117,8 +134,14 @@ export default function ModalVincularWhatsapp({
     if (!window.confirm("Descartar este número e voltar?")) return;
 
     try {
-      // Deletar instância do BD
-      await db.whatsappInstancias.delete(1);
+      // Deletar instância do BD com backup automático
+      await dbDeleteWithBackup(
+        "whatsappInstancias",
+        1,
+        Boolean(congregacao?.autoBackup),
+        isSignedIn,
+        uploadBackup,
+      );
 
       // Deletar instância anterior da API
       if (instanceName) {
@@ -167,13 +190,22 @@ export default function ModalVincularWhatsapp({
           setStatus("conectado");
           clearInterval(statusInterval);
 
-          await db.whatsappInstancias
-            .where("numero")
-            .equals(numeroConfirmado)
-            .modify({
+          // Salvar status atualizado no BD com backup automático
+          await dbSaveWithBackup(
+            "whatsappInstancias",
+            {
+              id: 1,
+              instanciaId: "",
+              nome: numeroConfirmado,
+              numero: numeroConfirmado,
               status: "conectado",
-              numeroConectado: numeroConfirmado,
-            });
+              dataCriacao: new Date(),
+            },
+            Boolean(congregacao?.autoBackup),
+            isSignedIn,
+            uploadBackup,
+            false,
+          );
 
           setTimeout(() => {
             onSuccess?.();
@@ -209,8 +241,14 @@ export default function ModalVincularWhatsapp({
       // Deletar instância que foi criada nesta sessão
       try {
         await deleteInstancia(instanceName);
-        // Também deletar do BD
-        await db.whatsappInstancias.delete(1);
+        // Também deletar do BD com backup automático
+        await dbDeleteWithBackup(
+          "whatsappInstancias",
+          1,
+          Boolean(congregacao?.autoBackup),
+          isSignedIn,
+          uploadBackup,
+        );
       } catch (err) {
         console.error("Erro ao deletar instância ao fechar:", err);
       }

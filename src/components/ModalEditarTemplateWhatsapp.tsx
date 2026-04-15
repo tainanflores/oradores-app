@@ -36,14 +36,6 @@ function ModalEditarTemplateWhatsapp({
     }
   }, [isOpen, congregacao.templateMensagemWhatsapp]);
 
-  // Sincronizar template sempre que a modal abre - para sempre mostrar o que está no banco
-  useEffect(() => {
-    if (isOpen) {
-      // Recarregar do banco pra garantir que sempre mostra a versão atual
-      setTemplate(congregacao.templateMensagemWhatsapp || TEMPLATE_PADRAO);
-    }
-  }, [isOpen, congregacao.templateMensagemWhatsapp]);
-
   const handleSalvar = async () => {
     setLoading(true);
     try {
@@ -54,7 +46,7 @@ function ModalEditarTemplateWhatsapp({
       await dbSaveWithBackup(
         "configuracoes",
         congregacaoAtualizada,
-        false,
+        Boolean(congregacao?.autoBackup),
         isSignedIn,
         uploadBackup,
       );

@@ -12,6 +12,7 @@ export interface BackupData {
     datasEspeciais: any[];
     temasBloqueados: any[];
     configuracoes: any[];
+    whatsappInstancias: any[];
   };
 }
 
@@ -29,6 +30,7 @@ export async function exportarDados(): Promise<BackupData> {
       datasEspeciais,
       temasBloqueados,
       configuracoes,
+      whatsappInstancias,
     ] = await Promise.all([
       db.oradores.toArray(),
       db.temas.toArray(),
@@ -38,7 +40,21 @@ export async function exportarDados(): Promise<BackupData> {
       db.datasEspeciais.toArray(),
       db.temasBloqueados.toArray(),
       db.configuracoes.toArray(),
+      db.whatsappInstancias.toArray(),
     ]);
+
+    console.log("[Backup Export] Dados sendo exportados:", {
+      oradores: oradores.length,
+      temas: temas.length,
+      oradorTemas: oradorTemas.length,
+      discursos: discursos.length,
+      saidasOrador: saidasOrador.length,
+      datasEspeciais: datasEspeciais.length,
+      temasBloqueados: temasBloqueados.length,
+      configuracoes: configuracoes.length,
+      whatsappInstancias: whatsappInstancias.length,
+      detalhesWhatsapp: whatsappInstancias, // ← Mostra os detalhes completos
+    });
 
     return {
       version: "1.0",
@@ -52,6 +68,7 @@ export async function exportarDados(): Promise<BackupData> {
         datasEspeciais,
         temasBloqueados,
         configuracoes,
+        whatsappInstancias,
       },
     };
   } catch (error) {
@@ -70,11 +87,16 @@ export async function importarDados(backupData: BackupData): Promise<void> {
       throw new Error("Arquivo de backup inválido ou corrompido");
     }
 
+    console.log(
+      "[Backup] Importando backup - Instâncias WhatsApp a restaurar:",
+      backupData.data.whatsappInstancias?.length || 0,
+    );
+
     // Fazer backup automático dos dados atuais antes de sobrescrever
     const backupAtual = await exportarDados();
     localStorage.setItem(
       "backup_auto_antes_importacao",
-      JSON.stringify(backupAtual)
+      JSON.stringify(backupAtual),
     );
 
     // Limpar todas as tabelas
@@ -87,6 +109,7 @@ export async function importarDados(backupData: BackupData): Promise<void> {
       db.datasEspeciais.clear(),
       db.temasBloqueados.clear(),
       db.configuracoes.clear(),
+      db.whatsappInstancias.clear(),
     ]);
 
     // Importar dados do backup
@@ -106,22 +129,27 @@ export async function importarDados(backupData: BackupData): Promise<void> {
     }
     if (backupData.data.saidasOrador?.length > 0) {
       importPromises.push(
-        db.saidasOrador.bulkAdd(backupData.data.saidasOrador)
+        db.saidasOrador.bulkAdd(backupData.data.saidasOrador),
       );
     }
     if (backupData.data.datasEspeciais?.length > 0) {
       importPromises.push(
-        db.datasEspeciais.bulkAdd(backupData.data.datasEspeciais)
+        db.datasEspeciais.bulkAdd(backupData.data.datasEspeciais),
       );
     }
     if (backupData.data.temasBloqueados?.length > 0) {
       importPromises.push(
-        db.temasBloqueados.bulkAdd(backupData.data.temasBloqueados)
+        db.temasBloqueados.bulkAdd(backupData.data.temasBloqueados),
       );
     }
     if (backupData.data.configuracoes?.length > 0) {
       importPromises.push(
-        db.configuracoes.bulkAdd(backupData.data.configuracoes)
+        db.configuracoes.bulkAdd(backupData.data.configuracoes),
+      );
+    }
+    if (backupData.data.whatsappInstancias?.length > 0) {
+      importPromises.push(
+        db.whatsappInstancias.bulkAdd(backupData.data.whatsappInstancias),
       );
     }
 
@@ -169,7 +197,7 @@ export function carregarArquivoBackup(file: File): Promise<BackupData> {
     reader.onload = (event) => {
       try {
         const backupData = JSON.parse(
-          event.target?.result as string
+          event.target?.result as string,
         ) as BackupData;
 
         // Validação básica
@@ -199,11 +227,11 @@ export async function restaurarBackup(backupData: BackupData): Promise<void> {
   const confirmacao = confirm(
     `⚠️ ATENÇÃO: Isso irá sobrescrever TODOS os dados atuais!\n\n` +
       `Backup criado em: ${new Date(backupData.timestamp).toLocaleString(
-        "pt-BR"
+        "pt-BR",
       )}\n` +
       `Versão: ${backupData.version}\n\n` +
       `Um backup automático dos dados atuais será salvo.\n\n` +
-      `Deseja continuar?`
+      `Deseja continuar?`,
   );
 
   if (!confirmacao) {

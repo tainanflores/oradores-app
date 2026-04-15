@@ -55,21 +55,21 @@ async function createInstancia(numero: string) {
 
     const data = await response.json();
 
-    // Salvar no IndexedDB (sempre com id: 1)
-    await db.whatsappInstancias.put({
-      id: 1,
-      instanciaId: data.instance.instanceId,
-      nome: numero,
-      numero: numero,
-      status: "aguardando_conexao",
-      dataCriacao: new Date(),
-    });
-
+    // Retornar dados para persistência (será salvo pelo componente usando dbSaveWithBackup)
     return {
       instanceId: data.instance.instanceId,
       instanceName: data.instance.instanceName,
       pairingCode: data.qrcode.pairingCode,
       hash: data.hash,
+      // Dados para persistência no BD
+      whatsappInstancia: {
+        id: 1,
+        instanciaId: data.instance.instanceId,
+        nome: numero,
+        numero: numero,
+        status: "aguardando_conexao" as const,
+        dataCriacao: new Date(),
+      },
     };
   } catch (erro) {
     console.error("Erro ao criar instância:", erro);
@@ -148,9 +148,7 @@ async function deleteInstancia(instanceName: string) {
       throw new Error(`Erro ao deletar instância: ${response.status}`);
     }
 
-    // Remover do IndexedDB (sempre id: 1)
-    await db.whatsappInstancias.delete(1);
-
+    // Retornar resposta (delete do BD será feito pelo componente usando dbDeleteWithBackup)
     return response.json();
   } catch (erro) {
     console.error("Erro ao deletar instância:", erro);
@@ -225,14 +223,7 @@ async function verificarEAtualizarStatusBD(): Promise<
       novoStatus = "aguardando_conexao";
     }
 
-    // Atualizar BD
-    await db.whatsappInstancias
-      .where("numero")
-      .equals(instancia.numero)
-      .modify({
-        status: novoStatus,
-      });
-
+    // Retornar novo status (component caller pode salvar no BD usando dbSaveWithBackup se necessário)
     return novoStatus;
   } catch (erro) {
     console.error("Erro ao verificar status:", erro);
