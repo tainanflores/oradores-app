@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   db,
   type Discurso,
@@ -46,9 +47,13 @@ import {
   marcarLembreteEnviado,
 } from "../utils/discursosLembrete";
 import { sendWhatsappEvolution } from "../utils/sendWhatsappEvolution";
+import { verificarEAtualizarStatusBD } from "../utils/whatsappEvolutionApi";
 import { formatDateBR } from "../utils/dateUtils";
 
 function AgendaPage() {
+  const navigate = useNavigate();
+  const { congregacao } = useConfig();
+  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
   const [discursos, setDiscursos] = useState<Discurso[]>([]);
   const [oradores, setOradores] = useState<Orador[]>([]);
   const [temas, setTemas] = useState<Tema[]>([]);
@@ -65,9 +70,7 @@ function AgendaPage() {
   const [showLembreteModal, setShowLembreteModal] = useState(false);
   const [lembretePendentes, setLembretePendentes] = useState<Discurso[]>([]);
   const lembreteIndexRef = useRef(0);
-  const { congregacao } = useConfig();
   const autoBackup = congregacao?.autoBackup ?? false;
-  const { isSignedIn, uploadBackup } = useGoogleDriveAuth();
 
   const loadAllData = useCallback(async () => {
     setLoading(true);
@@ -139,6 +142,36 @@ function AgendaPage() {
       toast.error("Telefone do orador ausente ou inválido!");
       return;
     }
+
+    // Verificar se WhatsApp está conectado
+    toast.loading("Verificando conexão do WhatsApp...");
+    try {
+      const statusAtual = await verificarEAtualizarStatusBD();
+
+      toast.dismiss();
+
+      if (statusAtual !== "conectado") {
+        toast.error(
+          "WhatsApp não está conectado. Conecte primeiro na configuração.",
+        );
+        // Redirecionar para Config e scroll para a seção de WhatsApp
+        navigate("/config");
+        // Scroll após navegação
+        setTimeout(() => {
+          const whatsappSection = document.getElementById("whatsapp-config");
+          if (whatsappSection) {
+            whatsappSection.scrollIntoView({ behavior: "smooth" });
+          }
+        }, 100);
+        return;
+      }
+    } catch (err) {
+      toast.dismiss();
+      console.error("Erro ao verificar WhatsApp:", err);
+      toast.error("Erro ao verificar status do WhatsApp");
+      return;
+    }
+
     const numero = orador.telefone.replace(/\D/g, "");
     const temaObj = temas.find((t) => t.id === discurso.temaId) || null;
     const horario = configuracao?.horarioReuniao || "";

@@ -122,10 +122,33 @@ export default function ModalVincularWhatsapp({
       // Começar polling
       setStatus("pollingCodigo");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Erro ao conectar WhatsApp",
-      );
-      setStatus("erro");
+      const errorMsg = err instanceof Error ? err.message : "Erro ao conectar WhatsApp";
+      
+      // Se é erro 404, instância foi deletada - limpar e reiniciar
+      if (errorMsg.includes("404")) {
+        try {
+          console.log("Instância não encontrada (404). Deletando do BD local...");
+          await dbDeleteWithBackup(
+            "whatsappInstancias",
+            1,
+            Boolean(congregacao?.autoBackup),
+            isSignedIn,
+            uploadBackup,
+          );
+          setNumero("");
+          setNumeroConfirmado("");
+          setInstanceName("");
+          setError("Instância foi deletada do servidor. Começando nova conexão...");
+          setStatus("inicial");
+        } catch (deleteErr) {
+          console.error("Erro ao deletar instância:", deleteErr);
+          setError(errorMsg);
+          setStatus("erro");
+        }
+      } else {
+        setError(errorMsg);
+        setStatus("erro");
+      }
     }
   };
 
